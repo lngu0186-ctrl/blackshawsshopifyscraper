@@ -117,8 +117,8 @@ export function useSaveProductField() {
       await supabase
         .from('scraped_products')
         .update({
-          override_fields: overrides,
-          edited_fields: editedFields,
+          override_fields: overrides as any,
+          edited_fields: editedFields as any,
           is_manually_edited: true,
         })
         .eq('id', productId);
