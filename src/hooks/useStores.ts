@@ -27,10 +27,18 @@ export function useAddStore() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ name, normalizedUrl, validationStatus, myshopifyDomain, url, scrapeStrategy, requiresAuth, authType }: {
+    mutationFn: async ({
+      name, normalizedUrl, validationStatus, myshopifyDomain, url, scrapeStrategy,
+      requiresAuth, authType, platform, platformConfidence, scrapeabilityScore,
+      reachabilityStatus, qualificationNotes, storeType, antibotSuspected,
+      loginRequired, sitemapFound, sitemapUrl,
+    }: {
       name: string; normalizedUrl: string; url: string;
       validationStatus: string; myshopifyDomain?: string;
       scrapeStrategy?: string; requiresAuth?: boolean; authType?: string;
+      platform?: string; platformConfidence?: string; scrapeabilityScore?: number;
+      reachabilityStatus?: string; qualificationNotes?: string; storeType?: string;
+      antibotSuspected?: boolean; loginRequired?: boolean; sitemapFound?: boolean; sitemapUrl?: string | null;
     }) => {
       const { data, error } = await supabase.from('stores').insert({
         user_id: user!.id,
@@ -44,7 +52,19 @@ export function useAddStore() {
         requires_auth: requiresAuth || false,
         auth_type: authType || 'none',
         auth_status: 'none',
-      }).select().single();
+        store_status: (scrapeabilityScore ?? 0) >= 60 ? 'validated' : 'active',
+        platform: platform || 'unknown',
+        platform_confidence: platformConfidence || null,
+        scrapeability_score: scrapeabilityScore || 0,
+        reachability_status: reachabilityStatus || 'unknown',
+        qualification_notes: qualificationNotes || null,
+        qualified_at: new Date().toISOString(),
+        store_type: storeType || 'unknown',
+        antibot_suspected: antibotSuspected || false,
+        login_required: loginRequired || false,
+        sitemap_found: sitemapFound || false,
+        sitemap_url: sitemapUrl || null,
+      } as any).select().single();
       if (error) throw error;
       return data;
     },
