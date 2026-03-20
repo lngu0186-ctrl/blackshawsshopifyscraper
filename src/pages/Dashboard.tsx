@@ -460,7 +460,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                   <div>
                     <h2 className="text-[13px] font-bold text-foreground">Extraction Pipeline</h2>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Real-time stage progress</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">All-time totals (canonical)</p>
                   </div>
                   {isRunning && <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />}
                 </div>
