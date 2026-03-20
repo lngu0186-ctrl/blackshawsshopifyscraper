@@ -226,14 +226,14 @@ function SeverityBadge({ sev }: { sev: string }) {
 
 function PctBar({ pct, warn = 20, crit = 50 }: { pct: number | null; warn?: number; crit?: number }) {
   if (pct === null) return <span className="text-xs text-muted-foreground italic">N/A</span>;
-  const color = pct >= crit ? 'bg-destructive' : pct >= warn ? 'bg-amber-500' : 'bg-emerald-500';
+  const color = pct >= crit ? 'bg-destructive' : pct >= warn ? 'bg-warning' : 'bg-success';
   return (
     <div className="flex items-center gap-2">
       <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden">
         <div className={cn('h-full rounded-full', color)} style={{ width: `${Math.min(pct, 100)}%` }} />
       </div>
       <span className={cn('text-xs font-medium tabular-nums',
-        pct >= crit ? 'text-destructive' : pct >= warn ? 'text-amber-600' : 'text-emerald-600'
+        pct >= crit ? 'text-destructive' : pct >= warn ? 'text-warning' : 'text-success'
       )}>{pct}%</span>
     </div>
   );
