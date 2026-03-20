@@ -111,9 +111,9 @@ function StatusPill({ status }: { status: string }) {
 
 // ─── Pipeline Stage Row ───────────────────────────────────────────────────────
 function PipelineRow({
-  icon: Icon, label, done, total, success, warning, error, active,
+  icon: Icon, label, done, total, success, warning, error, active, untracked,
 }: {
-  icon: any; label: string; done: number; total: number; success: number; warning: number; error: number; active?: boolean;
+  icon: any; label: string; done: number; total: number; success: number; warning: number; error: number; active?: boolean; untracked?: boolean;
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
@@ -124,9 +124,13 @@ function PipelineRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <span className={`text-[12px] font-medium ${active ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
-          <span className="text-[11px] font-bold tabular-nums text-foreground">{done.toLocaleString()} <span className="text-muted-foreground font-normal">/ {total.toLocaleString()}</span></span>
+          {untracked ? (
+            <span className="text-[10px] text-muted-foreground italic">Not tracked</span>
+          ) : (
+            <span className="text-[11px] font-bold tabular-nums text-foreground">{done.toLocaleString()} <span className="text-muted-foreground font-normal">/ {total.toLocaleString()}</span></span>
+          )}
         </div>
-        <Progress value={pct} className="h-1.5" />
+        {!untracked && <Progress value={pct} className="h-1.5" />}
       </div>
       <div className="flex items-center gap-2 text-[10px] flex-shrink-0">
         {success > 0 && <span className="text-success font-semibold">+{success}</span>}
@@ -321,16 +325,18 @@ export default function Dashboard() {
     enrichMutation.mutate({ source_key: sourceKey, limit: 50 });
   }
 
-  // Pipeline stages (from scrape run + canonical counts)
+  // Pipeline stages — all counts from canonical products table (productsTableStats)
+  const pts = pipeline?.productsTableStats;
+  const ptTotal = pts?.productsDiscovered ?? 0;
   const pipelineStages = [
-    { icon: Globe,     label: 'Sources Detected',         done: totalStores, total: enabledStores.length, success: completedStores, warning: runData?.error_count ?? 0, error: 0, active: isRunning && completedStores === 0 },
-    { icon: Layers,    label: 'Categories Discovered',    done: completedStores, total: totalStores || enabledStores.length, success: completedStores, warning: 0, error: runData?.error_count ?? 0, active: isRunning && completedStores > 0 && completedStores < totalStores },
-    { icon: Package,   label: 'Products Discovered',      done: totalScraped, total: totalScraped, success: totalScraped, warning: 0, error: 0, active: false },
-    { icon: Eye,       label: 'Detail Pages Enriched',    done: pipeline?.enriched ?? 0, total: totalScraped, success: readyCount, warning: reviewCount, error: pipeline?.partialRaw ?? 0, active: false },
-    { icon: Tag,       label: 'Price Extracted',          done: totalScraped - (pipeline?.missingPrice ?? 0), total: totalScraped, success: readyCount, warning: 0, error: pipeline?.missingPrice ?? 0, active: false },
-    { icon: Image,     label: 'Images Extracted',         done: totalScraped - (pipeline?.missingImage ?? 0), total: totalScraped, success: 0, warning: pipeline?.missingImage ?? 0, error: 0, active: false },
-    { icon: FileText,  label: 'Descriptions Extracted',   done: totalScraped - (pipeline?.missingDescription ?? 0), total: totalScraped, success: 0, warning: pipeline?.missingDescription ?? 0, error: 0, active: false },
-    { icon: CheckCircle2, label: 'Validation Complete',   done: readyCount, total: totalScraped, success: readyCount, warning: reviewCount, error: pipeline?.failed ?? 0, active: false },
+    { icon: Globe,        label: 'Sources Detected',       done: pts?.sourcesDetected ?? 0,      total: pts?.sourcesDetected ?? 0,   success: 0, warning: 0, error: 0,  active: false },
+    { icon: Layers,       label: 'Categories Discovered',  done: pts?.categoriesDiscovered ?? 0,  total: pts?.categoriesDiscovered ?? 0, success: 0, warning: 0, error: 0, active: false },
+    { icon: Package,      label: 'Products Discovered',    done: ptTotal,                          total: ptTotal,                     success: ptTotal, warning: 0, error: 0, active: false },
+    { icon: Eye,          label: 'Detail Pages Enriched',  done: pts?.detailEnriched ?? 0,         total: ptTotal,                     success: pts?.detailEnriched ?? 0, warning: 0, error: 0, active: false },
+    { icon: Tag,          label: 'Price Extracted',        done: pts?.pricesExtracted ?? 0,        total: ptTotal,                     success: 0, warning: ptTotal - (pts?.pricesExtracted ?? 0), error: 0, active: false },
+    { icon: Image,        label: 'Images Extracted',       done: pts?.imagesExtracted ?? 0,        total: ptTotal,                     success: 0, warning: ptTotal - (pts?.imagesExtracted ?? 0), error: 0, active: false },
+    { icon: FileText,     label: 'Descriptions Extracted', done: pts?.descriptionsExtracted ?? 0,  total: ptTotal,                     success: 0, warning: ptTotal - (pts?.descriptionsExtracted ?? 0), error: 0, active: false },
+    { icon: CheckCircle2, label: 'Validation Complete',    done: pts?.validationComplete ?? 0,     total: ptTotal,                     success: pts?.exportReady ?? 0, warning: ptTotal - (pts?.validationComplete ?? 0), error: 0, active: false },
   ];
 
   const coverageFields = [
@@ -454,7 +460,7 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                   <div>
                     <h2 className="text-[13px] font-bold text-foreground">Extraction Pipeline</h2>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Real-time stage progress</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">All-time totals (canonical)</p>
                   </div>
                   {isRunning && <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />}
                 </div>

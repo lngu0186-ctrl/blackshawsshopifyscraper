@@ -7,13 +7,26 @@
  *   - readyCount, reviewRequired, partialRaw
  *   - field coverage: missingPrice, missingImage, missingDescription, missingBarcode
  *   - per-source breakdown
+ *   - productsTableStats: canonical counts from the products table (used by Dashboard pipeline stages)
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
 
+export interface ProductsTableStats {
+  sourcesDetected: number;        // stores where store_status != 'unreachable'
+  categoriesDiscovered: number;   // COUNT DISTINCT product_type in products
+  productsDiscovered: number;     // products with valid product_scrape_status
+  detailEnriched: number;         // product_scrape_status IN (detail_fetched, normalized, validated, ready)
+  pricesExtracted: number;        // price_min IS NOT NULL AND > 0
+  imagesExtracted: number;        // images IS NOT NULL (jsonb not null/empty)
+  descriptionsExtracted: number;  // body_html IS NOT NULL AND != ''
+  validationComplete: number;     // product_scrape_status IN (validated, ready)
+  exportReady: number;            // product_scrape_status = 'ready'
+}
+
 export interface PipelineStats {
-  // Core pipeline counts
+  // Core pipeline counts (from scraped_products — powers KPI row)
   discovered: number;
   queued: number;       // detail_scraped=false AND auth_blocked=false AND scrape_status!='failed'
   enriched: number;     // detail_scraped=true AND scrape_status='enriched'
@@ -37,6 +50,9 @@ export interface PipelineStats {
 
   // Per-source stats
   bySource: Record<string, SourceStats>;
+
+  // Canonical counts from the products table — used by the Dashboard pipeline stages panel
+  productsTableStats: ProductsTableStats;
 }
 
 export interface SourceStats {
@@ -62,7 +78,7 @@ export function usePipelineStats() {
     enabled: !!user,
     staleTime: 15_000,
     queryFn: async (): Promise<PipelineStats> => {
-      // Fetch all needed columns — no limit, paginated in batches of 1000
+      // ── 1. scraped_products batched fetch (powers KPI row) ─────────────────
       let allRows: any[] = [];
       let from = 0;
       const batchSize = 1000;
@@ -150,6 +166,105 @@ export function usePipelineStats() {
         }
       }
 
+      // ── 2. Canonical products table counts (parallel HEAD queries) ──────────
+      const DISCOVERED_STATUSES = ['discovered', 'detail_fetched', 'normalized', 'validated', 'ready', 'review_required'];
+      const ENRICHED_STATUSES   = ['detail_fetched', 'normalized', 'validated', 'ready'];
+      const VALIDATED_STATUSES  = ['validated', 'ready'];
+
+      const [
+        sourcesRes,
+        productsDiscoveredRes,
+        detailEnrichedRes,
+        pricesRes,
+        imagesRes,
+        descriptionsRes,
+        validatedRes,
+        exportReadyRes,
+        categoriesRes,
+      ] = await Promise.all([
+        // Sources detected: stores where store_status != 'unreachable'
+        supabase
+          .from('stores')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .neq('store_status', 'unreachable'),
+
+        // Products discovered
+        supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .in('product_scrape_status', DISCOVERED_STATUSES),
+
+        // Detail enriched
+        supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .in('product_scrape_status', ENRICHED_STATUSES),
+
+        // Prices extracted
+        supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .not('price_min', 'is', null)
+          .gt('price_min', 0),
+
+        // Images extracted — images jsonb column is not null
+        supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .not('images', 'is', null),
+
+        // Descriptions extracted
+        supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .not('body_html', 'is', null)
+          .neq('body_html', ''),
+
+        // Validation complete
+        supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .in('product_scrape_status', VALIDATED_STATUSES),
+
+        // Export ready
+        supabase
+          .from('products')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .eq('product_scrape_status', 'ready'),
+
+        // Categories discovered: fetch distinct product_type values (not a COUNT DISTINCT query)
+        supabase
+          .from('products')
+          .select('product_type')
+          .eq('user_id', user!.id)
+          .not('product_type', 'is', null),
+      ]);
+
+      // Count distinct categories client-side (Supabase doesn't support COUNT DISTINCT via REST)
+      const distinctCategories = new Set(
+        (categoriesRes.data ?? []).map((r: any) => r.product_type).filter(Boolean)
+      ).size;
+
+      const productsTableStats: ProductsTableStats = {
+        sourcesDetected:       sourcesRes.count          ?? 0,
+        categoriesDiscovered:  distinctCategories,
+        productsDiscovered:    productsDiscoveredRes.count ?? 0,
+        detailEnriched:        detailEnrichedRes.count    ?? 0,
+        pricesExtracted:       pricesRes.count            ?? 0,
+        imagesExtracted:       imagesRes.count            ?? 0,
+        descriptionsExtracted: descriptionsRes.count      ?? 0,
+        validationComplete:    validatedRes.count         ?? 0,
+        exportReady:           exportReadyRes.count       ?? 0,
+      };
+
       return {
         discovered,
         queued,
@@ -166,6 +281,7 @@ export function usePipelineStats() {
         missingBarcode,
         detailFailed,
         bySource: sourceMap,
+        productsTableStats,
       };
     },
   });
