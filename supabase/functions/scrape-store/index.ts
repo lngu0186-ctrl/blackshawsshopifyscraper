@@ -103,12 +103,11 @@ Deno.serve(async (req) => {
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
   );
 
-  const token = authHeader.replace('Bearer ', '');
-  const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
-  if (claimsError || !claimsData?.claims) {
+  const { data: userData, error: userError } = await supabaseUser.auth.getUser();
+  if (userError || !userData?.user) {
     return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
   }
-  const userId = claimsData.claims.sub;
+  const userId = userData.user.id;
 
   const { scrapeRunId, storeId, interPageDelay = 500, maxProducts = 0 } = await req.json();
 
@@ -438,24 +437,19 @@ Deno.serve(async (req) => {
       message: `${totalProducts} products, ${totalPriceChanges} price changes`,
     }).eq('id', runStoreId);
 
-    // Update scrape_run totals
-    await supabaseAdmin.rpc('increment_scrape_run_totals', {
-      run_id: scrapeRunId,
-      products: totalProducts,
-      price_changes: totalPriceChanges,
-    }).catch(() => {
-      // Fallback manual increment if RPC not found
-      supabaseAdmin.from('scrape_runs').select('total_products, total_price_changes, completed_stores').eq('id', scrapeRunId).single()
-        .then(({ data }) => {
-          if (data) {
-            supabaseAdmin.from('scrape_runs').update({
-              total_products: (data.total_products || 0) + totalProducts,
-              total_price_changes: (data.total_price_changes || 0) + totalPriceChanges,
-              completed_stores: (data.completed_stores || 0) + 1,
-            }).eq('id', scrapeRunId);
-          }
-        });
-    });
+    // Update scrape_run totals (manual increment, no RPC needed)
+    const { data: runData } = await supabaseAdmin
+      .from('scrape_runs')
+      .select('total_products, total_price_changes, completed_stores')
+      .eq('id', scrapeRunId)
+      .single();
+    if (runData) {
+      await supabaseAdmin.from('scrape_runs').update({
+        total_products: (runData.total_products || 0) + totalProducts,
+        total_price_changes: (runData.total_price_changes || 0) + totalPriceChanges,
+        completed_stores: (runData.completed_stores || 0) + 1,
+      }).eq('id', scrapeRunId);
+    }
 
     await log('info', `Completed ${store.name}: ${totalProducts} products, ${totalPriceChanges} price changes`);
 
