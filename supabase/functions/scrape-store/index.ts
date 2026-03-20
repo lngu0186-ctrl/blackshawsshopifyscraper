@@ -5,17 +5,28 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const BASE_SCRAPE_HEADERS = {
+const BASE_HEADERS = {
   'User-Agent': 'Mozilla/5.0 (compatible; AUPharmacyScout/1.0)',
   'Accept': 'application/json, text/html;q=0.9',
   'Accept-Language': 'en-AU,en;q=0.9',
 };
 
-// ---- Helpers ----
+// ── Timing constants ──────────────────────────────────────────────────────────
+const REQUEST_TIMEOUT_MS   = 20_000;
+const COLLECTION_TIMEOUT_MS = 45_000;
+const STORE_TIMEOUT_MS      = 10 * 60_000;
+const BACKOFF_DELAYS        = [2_000, 5_000, 15_000];
+const INTER_COLLECTION_DELAY = 2_500;
+
+// ── Collection state machine ──────────────────────────────────────────────────
+type CollectionState = 'queued' | 'running' | 'retrying' | 'fallback_strategy' | 'success' | 'skipped' | 'failed';
+type StoreTerminal   = 'completed' | 'completed_with_skips' | 'failed' | 'cancelled' | 'timed_out';
+type Strategy        = 'products_json' | 'collection_html' | 'sitemap_urls' | 'skip';
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
 function slugify(name: string): string {
   return name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 }
-
 function htmlToPlainText(html: string): string {
   if (!html) return '';
   return html
@@ -24,50 +35,82 @@ function htmlToPlainText(html: string): string {
     .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').replace(/&quot;/g, '"').replace(/&#39;/g, "'")
     .replace(/\n{3,}/g, '\n\n').trim();
 }
-
-async function md5(str: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+async function sha256(str: string): Promise<string> {
+  const data = new TextEncoder().encode(str);
+  const buf = await crypto.subtle.digest('SHA-256', data);
+  return Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
 }
-
 async function buildContentHash(product: any): Promise<string> {
-  const variants = product.variants || [];
-  const prices = [...variants.map((v: any) => String(v.price || ''))].sort();
-  const skus = [...variants.map((v: any) => String(v.sku || ''))].sort();
-  const images = [...(product.images || []).map((i: any) => String(i.src || ''))].sort();
-  const raw = [product.title || '', htmlToPlainText(product.body_html || ''), product.tags || '',
-    product.vendor || '', product.product_type || '', ...prices, ...skus, ...images].join('|');
-  return md5(raw);
+  const prices = (product.variants || []).map((v: any) => String(v.price || '')).sort();
+  const raw = [product.title||'', htmlToPlainText(product.body_html||''), product.tags||'',
+    product.vendor||'', product.product_type||'', ...prices].join('|');
+  return sha256(raw);
+}
+function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)); }
+
+// ── Fetch with AbortController + timeout ─────────────────────────────────────
+async function fetchWithTimeout(url: string, extraHeaders: Record<string, string> = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { signal: ctrl.signal, headers: { ...BASE_HEADERS, ...extraHeaders } });
+    clearTimeout(t);
+    return res;
+  } catch (err) {
+    clearTimeout(t);
+    if ((err as Error).name === 'AbortError') throw new Error(`timeout:${url}`);
+    throw err;
+  }
 }
 
-async function sleep(ms: number) { return new Promise(r => setTimeout(r, ms)); }
+// ── Categorise errors for reason_code ────────────────────────────────────────
+function classifyError(err: unknown, status?: number): string {
+  const msg = String(err);
+  if (status === 429) return 'http_429';
+  if (status === 503) return 'http_503';
+  if (status && status >= 500) return `http_${status}`;
+  if (status === 401 || status === 403) return `http_${status}`;
+  if (msg.startsWith('timeout:')) return 'timeout';
+  if (msg.includes('invalid json') || msg.includes('JSON')) return 'invalid_json';
+  if (msg.includes('ECONNRESET') || msg.includes('network')) return 'network_error';
+  return 'unknown_error';
+}
 
-async function fetchWithRetry(url: string, extraHeaders: Record<string, string> = {}, maxRetries = 3): Promise<Response> {
-  let lastError: Error | null = null;
-  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+// ── Retry with exponential backoff (respects abort signal) ───────────────────
+async function retryFetch(
+  url: string,
+  extraHeaders: Record<string, string>,
+  checkSkip: () => boolean,
+  label: string,
+): Promise<{ res: Response | null; error: string | null; reasonCode: string; attempt: number }> {
+  let lastError = '';
+  let reasonCode = 'unknown_error';
+  for (let attempt = 0; attempt < BACKOFF_DELAYS.length + 1; attempt++) {
+    if (checkSkip()) return { res: null, error: 'operator_skipped', reasonCode: 'operator_skipped', attempt };
     try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 30000);
-      const res = await fetch(url, { signal: controller.signal, headers: { ...BASE_SCRAPE_HEADERS, ...extraHeaders } });
-      clearTimeout(timeout);
-      if (res.status === 429 || (res.status >= 500 && res.status < 600)) {
-        const backoff = (Math.pow(2, attempt) * 500) + Math.floor(Math.random() * 200);
-        await sleep(backoff);
-        lastError = new Error(`HTTP ${res.status}`);
-        continue;
+      const res = await fetchWithTimeout(url, extraHeaders);
+      if (res.status === 429 || res.status >= 500) {
+        lastError = `HTTP ${res.status}`;
+        reasonCode = classifyError(null, res.status);
+        if (attempt < BACKOFF_DELAYS.length) {
+          await sleep(BACKOFF_DELAYS[attempt]);
+          continue;
+        }
+        return { res, error: lastError, reasonCode, attempt };
       }
-      return res;
+      return { res, error: null, reasonCode: 'ok', attempt };
     } catch (err) {
-      lastError = err as Error;
-      if (attempt < maxRetries) { const backoff = (Math.pow(2, attempt) * 500) + Math.floor(Math.random() * 200); await sleep(backoff); }
+      lastError = String(err);
+      reasonCode = classifyError(err);
+      if (attempt < BACKOFF_DELAYS.length) {
+        await sleep(BACKOFF_DELAYS[attempt]);
+      }
     }
   }
-  throw lastError || new Error('Max retries exceeded');
+  return { res: null, error: lastError, reasonCode, attempt: BACKOFF_DELAYS.length };
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
@@ -83,110 +126,109 @@ Deno.serve(async (req) => {
   if (userError || !userData?.user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
   const userId = userData.user.id;
 
-  const { scrapeRunId, storeId, interPageDelay = 500, maxProducts = 0 } = await req.json();
+  const { scrapeRunId, storeId, interPageDelay = 2500, maxProducts = 0 } = await req.json();
   if (!scrapeRunId || !storeId) return new Response(JSON.stringify({ error: 'scrapeRunId and storeId required' }), { status: 400, headers: corsHeaders });
 
-  const { data: store, error: storeErr } = await supabaseAdmin.from('stores').select('*').eq('id', storeId).eq('user_id', userId).single();
-  if (storeErr || !store) return new Response(JSON.stringify({ error: 'Store not found' }), { status: 404, headers: corsHeaders });
+  // Fetch store + run_store record
+  const [storeRes, runStoreRes] = await Promise.all([
+    supabaseAdmin.from('stores').select('*').eq('id', storeId).eq('user_id', userId).single(),
+    supabaseAdmin.from('scrape_run_stores').select('*').eq('scrape_run_id', scrapeRunId).eq('store_id', storeId).single(),
+  ]);
+  if (storeRes.error || !storeRes.data) return new Response(JSON.stringify({ error: 'Store not found' }), { status: 404, headers: corsHeaders });
+  if (runStoreRes.error || !runStoreRes.data) return new Response(JSON.stringify({ error: 'scrape_run_store not found' }), { status: 404, headers: corsHeaders });
 
-  const { data: runStore, error: runStoreErr } = await supabaseAdmin.from('scrape_run_stores').select('*').eq('scrape_run_id', scrapeRunId).eq('store_id', storeId).single();
-  if (runStoreErr || !runStore) return new Response(JSON.stringify({ error: 'scrape_run_store not found' }), { status: 404, headers: corsHeaders });
-
+  const store = storeRes.data;
+  const runStore = runStoreRes.data;
   const runStoreId = runStore.id;
   const storeSlug = slugify(store.name);
   const baseUrl = store.normalized_url;
-  const scrapeStrategy: string = store.scrape_strategy || 'products_json';
+
+  // Store-level AbortController (for run cancellation / timeout)
+  const storeAbort = new AbortController();
+  const storeTimeout = setTimeout(() => storeAbort.abort('store_timeout'), STORE_TIMEOUT_MS);
 
   await supabaseAdmin.from('scrape_run_stores').update({ status: 'fetching', started_at: new Date().toISOString() }).eq('id', runStoreId);
 
-  // ── scraper_events helper — always includes store_id and run_id ─────────────
+  // ── Auth headers ─────────────────────────────────────────────────────────
+  let authHeaders: Record<string, string> = {};
+  if (store.requires_auth && store.auth_cookie) {
+    authHeaders = { Cookie: store.auth_cookie };
+  }
+
+  // ── State ─────────────────────────────────────────────────────────────────
+  let totalProducts = 0;
+  let totalPriceChanges = 0;
+  let pagesVisited = 0;
+  let collectionsCompleted = 0;
+  let collectionsSkipped = 0;
+  let collectionsFailed = 0;
+  const seenProductIds = new Set<string>();
+
+  // Batched quality warnings (not emitted per-product)
+  const missingImage: string[] = [];
+  const missingPrice: string[] = [];
+  const missingDesc: string[] = [];
+
+  // ── Control checks ─────────────────────────────────────────────────────────
+  async function isRunCancelled(): Promise<boolean> {
+    const { data } = await supabaseAdmin.from('scrape_runs').select('status').eq('id', scrapeRunId).single();
+    return data?.status === 'cancelled';
+  }
+  async function isCollectionSkipRequested(): Promise<boolean> {
+    const { data } = await supabaseAdmin.from('scrape_run_stores').select('skip_requested').eq('id', runStoreId).single();
+    return !!data?.skip_requested;
+  }
+  function isStoreAborted(): boolean { return storeAbort.signal.aborted; }
+  function makeCheckSkip(checkCollection: boolean) {
+    // Synchronous fast check — doesn't hit DB (caller polls DB separately)
+    return () => isStoreAborted();
+  }
+
+  // ── Event emitter ─────────────────────────────────────────────────────────
   async function emitEvent(opts: {
     stage: string; severity?: string; message: string;
     url?: string | null; reason_code?: string | null; raw_error?: string | null;
-    source_platform?: string | null; product_id?: string | null;
+    collection_handle?: string | null; strategy_name?: string | null;
+    attempt_number?: number; retry_count?: number; http_status?: number | null;
+    duration_ms?: number | null; was_auto_recovered?: boolean; was_operator_action?: boolean;
   }) {
+    const now = new Date().toISOString();
     await supabaseAdmin.from('scraper_events').insert({
       user_id: userId,
-      store_id: storeId,      // always set — never NULL
-      run_id: scrapeRunId,    // always set — never NULL
-      product_id: opts.product_id ?? null,
+      store_id: storeId,
+      run_id: scrapeRunId,
       stage: opts.stage,
       severity: opts.severity ?? 'info',
       message: opts.message,
       url: opts.url ?? null,
       reason_code: opts.reason_code ?? null,
       raw_error: opts.raw_error ?? null,
-      source_platform: opts.source_platform ?? (scrapeStrategy || 'shopify_json'),
+      collection_handle: opts.collection_handle ?? null,
+      strategy_name: opts.strategy_name ?? null,
+      attempt_number: opts.attempt_number ?? 0,
+      retry_count: opts.retry_count ?? 0,
+      http_status: opts.http_status ?? null,
+      duration_ms: opts.duration_ms ?? null,
+      was_auto_recovered: opts.was_auto_recovered ?? false,
+      was_operator_action: opts.was_operator_action ?? false,
+      ended_at: now,
     });
+    // Heartbeat: update last_event_at on run_store so stall detection works
+    await supabaseAdmin.from('scrape_run_stores').update({ last_event_at: now }).eq('id', runStoreId);
   }
 
-  async function log(level: string, message: string, metadata?: any) {
-    await supabaseAdmin.from('scrape_logs').insert({ scrape_run_id: scrapeRunId, user_id: userId, store_id: storeId, level, message, metadata: metadata || null });
+  async function log(level: string, message: string) {
+    await supabaseAdmin.from('scrape_logs').insert({ scrape_run_id: scrapeRunId, user_id: userId, store_id: storeId, level, message });
   }
 
-  async function checkCancelled(): Promise<boolean> {
-    const { data } = await supabaseAdmin.from('scrape_runs').select('status').eq('id', scrapeRunId).single();
-    return data?.status === 'cancelled';
+  // ── Update run_store progress fields ─────────────────────────────────────
+  async function updateProgress(patch: Record<string, any>) {
+    await supabaseAdmin.from('scrape_run_stores').update(patch).eq('id', runStoreId);
   }
 
-  // Track pages visited — incremented and written to scrape_runs at finalization
-  let pagesVisited = 0;
-
-  // Helper to increment pages_visited on scrape_runs
-  async function incrementPagesVisited(delta: number) {
-    pagesVisited += delta;
-    await supabaseAdmin.from('scrape_runs')
-      .update({ pages_visited: pagesVisited })
-      .eq('id', scrapeRunId);
-  }
-
-  // ── Emit run_started ──────────────────────────────────────────────────────
-  await emitEvent({ stage: 'run_started', severity: 'info', message: `Run started for ${store.name} using ${scrapeStrategy}`, source_platform: scrapeStrategy });
-
-  let authHeaders: Record<string, string> = {};
-  if (store.requires_auth && store.auth_cookie) {
-    const cookieExpiry = store.auth_cookie_expires_at ? new Date(store.auth_cookie_expires_at) : null;
-    const now = new Date();
-    if (cookieExpiry && cookieExpiry < now) {
-      await log('warn', `Auth cookie for ${store.name} expired. Re-authenticating before scrape.`);
-      const reAuthResult = await reAuthenticate(store, supabaseAdmin, userId);
-      if (reAuthResult.success && reAuthResult.auth_cookie) {
-        authHeaders = { Cookie: reAuthResult.auth_cookie };
-      } else {
-        await log('error', `Auth failed for ${store.name}: ${reAuthResult.message}`);
-        await emitEvent({ stage: 'auth_blocked', severity: 'error', message: `Authentication failed for ${store.name}: ${reAuthResult.message}`, reason_code: 'cookie_expired' });
-        await supabaseAdmin.from('scrape_run_stores').update({ status: 'error', finished_at: new Date().toISOString(), message: 'Authentication failed. Please update credentials.' }).eq('id', runStoreId);
-        return new Response(JSON.stringify({ success: false, error: 'Authentication failed' }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-      }
-    } else {
-      authHeaders = { Cookie: store.auth_cookie };
-    }
-  }
-
-  async function reAuthenticate(storeData: any, adminClient: any, uid: string): Promise<{ success: boolean; auth_cookie: string | null; message: string }> {
-    const authType = storeData.auth_type || 'storefront_password';
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    try {
-      const res = await fetch(`${supabaseUrl}/functions/v1/auth-store`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}` },
-        body: JSON.stringify({ store_id: storeData.id, url: storeData.normalized_url, auth_type: authType, password: storeData.storefront_password || storeData.auth_password, email: storeData.auth_email }),
-      });
-      const result = await res.json();
-      return { success: result.success, auth_cookie: null, message: result.message };
-    } catch (e) {
-      return { success: false, auth_cookie: null, message: String(e) };
-    }
-  }
-
-  let totalProducts = 0;
-  let totalPriceChanges = 0;
-  let pageCount = 0;
-  const seenProductIds = new Set<string>(); // for deduplication across collections
-
+  // ── Product persistence ───────────────────────────────────────────────────
   async function processProduct(product: any, productBaseUrl: string, collectionHandle?: string) {
     const shopifyId = String(product.id);
-    // Dedup by Shopify product ID across multiple collections
     if (seenProductIds.has(shopifyId)) return;
     seenProductIds.add(shopifyId);
 
@@ -196,75 +238,74 @@ Deno.serve(async (req) => {
     const contentHash = await buildContentHash(product);
     const priceArr = (product.variants || []).map((v: any) => parseFloat(v.price) || 0).filter((p: number) => p > 0);
     const compareArr = (product.variants || []).map((v: any) => parseFloat(v.compare_at_price) || 0).filter((p: number) => p > 0);
-
-    // Derive product_type from collection handle if not set on product
     const productType = product.product_type || (collectionHandle ? collectionHandle.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null);
 
     const productData = {
-      user_id: userId, store_id: storeId, store_name: store.name, store_slug: storeSlug, handle, store_handle: storeHandle,
-      title: product.title || '', body_html: product.body_html || null, body_plain: bodyPlain || null,
+      user_id: userId, store_id: storeId, store_name: store.name, store_slug: storeSlug,
+      handle, store_handle: storeHandle, title: product.title || '',
+      body_html: product.body_html || null, body_plain: bodyPlain || null,
       vendor: product.vendor || null, product_type: productType,
       tags: Array.isArray(product.tags) ? product.tags.join(', ') : (product.tags || null),
-      published: product.published_at != null, status: 'active', url: `${productBaseUrl}/products/${handle}`,
+      published: product.published_at != null, status: 'active',
+      url: `${productBaseUrl}/products/${handle}`,
       images: product.images || [], options: product.options || [], raw_product: product,
-      price_min: priceArr.length > 0 ? Math.min(...priceArr) : null, price_max: priceArr.length > 0 ? Math.max(...priceArr) : null,
-      compare_at_price_min: compareArr.length > 0 ? Math.min(...compareArr) : null, compare_at_price_max: compareArr.length > 0 ? Math.max(...compareArr) : null,
-      shopify_product_id: shopifyId, shopify_created_at: product.created_at || null, shopify_updated_at: product.updated_at || null,
-      shopify_published_at: product.published_at || null, scraped_at: new Date().toISOString(), content_hash: contentHash,
+      price_min: priceArr.length > 0 ? Math.min(...priceArr) : null,
+      price_max: priceArr.length > 0 ? Math.max(...priceArr) : null,
+      compare_at_price_min: compareArr.length > 0 ? Math.min(...compareArr) : null,
+      compare_at_price_max: compareArr.length > 0 ? Math.max(...compareArr) : null,
+      shopify_product_id: shopifyId,
+      shopify_created_at: product.created_at || null, shopify_updated_at: product.updated_at || null,
+      shopify_published_at: product.published_at || null,
+      scraped_at: new Date().toISOString(), content_hash: contentHash,
     };
 
-    const { data: existingProduct } = await supabaseAdmin.from('products').select('id, content_hash, first_seen_at').eq('store_id', storeId).eq('handle', handle).single();
-    const hashChanged = existingProduct && existingProduct.content_hash !== contentHash;
-    const upsertData: any = { ...productData, first_seen_at: existingProduct?.first_seen_at || new Date().toISOString() };
+    const { data: existing } = await supabaseAdmin.from('products').select('id, content_hash, first_seen_at').eq('store_id', storeId).eq('handle', handle).single();
+    const hashChanged = existing && existing.content_hash !== contentHash;
+    const upsertData: any = { ...productData, first_seen_at: existing?.first_seen_at || new Date().toISOString() };
     if (hashChanged) upsertData.last_changed_at = new Date().toISOString();
 
-    const { data: upsertedProduct, error: productErr } = await supabaseAdmin.from('products').upsert(upsertData, { onConflict: 'store_id,handle' }).select('id').single();
-    if (productErr || !upsertedProduct) {
-      await log('warn', `Failed to upsert product ${handle}: ${productErr?.message}`);
-      await emitEvent({ stage: 'product_extraction_failed', severity: 'warning', message: `Failed to upsert product ${handle}: ${productErr?.message}`, url: `${productBaseUrl}/products/${handle}`, raw_error: productErr?.message });
-      return;
-    }
+    const { data: saved, error: productErr } = await supabaseAdmin.from('products').upsert(upsertData, { onConflict: 'store_id,handle' }).select('id').single();
+    if (productErr || !saved) return;
+    const productId = saved.id;
 
-    const productId = upsertedProduct.id;
+    // Batch quality issues — emit one summary event per store at the end, not per-product
+    if (!productData.price_min) missingPrice.push(handle);
+    if (!product.images || product.images.length === 0) missingImage.push(handle);
+    if (!product.body_html || product.body_html.trim() === '') missingDesc.push(handle);
 
-    // Emit missing field events after upsert
-    if (!productData.price_min) {
-      await emitEvent({ stage: 'price_missing', severity: 'warning', message: `Price missing for product "${product.title}"`, url: `${productBaseUrl}/products/${handle}`, reason_code: 'no_variants_with_price', product_id: productId });
-    }
-    if (!product.images || product.images.length === 0) {
-      await emitEvent({ stage: 'image_missing', severity: 'warning', message: `No images for product "${product.title}"`, url: `${productBaseUrl}/products/${handle}`, reason_code: 'no_images', product_id: productId });
-    }
-    if (!product.body_html || product.body_html.trim() === '') {
-      await emitEvent({ stage: 'description_missing', severity: 'warning', message: `No description for product "${product.title}"`, url: `${productBaseUrl}/products/${handle}`, reason_code: 'empty_body_html', product_id: productId });
-    }
-
+    // Process variants + price history
     for (const variant of product.variants || []) {
       const variantData = {
-        user_id: userId, product_id: productId, store_id: storeId, shopify_variant_id: String(variant.id),
-        variant_position: variant.position || null, variant_title: variant.title || null, sku: variant.sku || null,
-        barcode: variant.barcode || null, option1: variant.option1 || null, option2: variant.option2 || null, option3: variant.option3 || null,
-        price: variant.price ? parseFloat(variant.price) : null, compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
+        user_id: userId, product_id: productId, store_id: storeId,
+        shopify_variant_id: String(variant.id),
+        variant_position: variant.position || null, variant_title: variant.title || null,
+        sku: variant.sku || null, barcode: variant.barcode || null,
+        option1: variant.option1 || null, option2: variant.option2 || null, option3: variant.option3 || null,
+        price: variant.price ? parseFloat(variant.price) : null,
+        compare_at_price: variant.compare_at_price ? parseFloat(variant.compare_at_price) : null,
         grams: variant.grams || 0, taxable: variant.taxable !== false, requires_shipping: variant.requires_shipping !== false,
-        fulfillment_service: variant.fulfillment_service || 'manual', inventory_policy: variant.inventory_policy || 'deny',
-        inventory_tracker: variant.inventory_management || null, inventory_quantity: variant.inventory_quantity || 0,
+        fulfillment_service: variant.fulfillment_service || 'manual',
+        inventory_policy: variant.inventory_policy || 'deny',
+        inventory_tracker: variant.inventory_management || null,
+        inventory_quantity: variant.inventory_quantity || 0,
         featured_image_url: variant.featured_image?.src || null, raw_variant: variant,
       };
-
       const { data: upsertedVariant, error: variantErr } = await supabaseAdmin.from('product_variants').upsert(variantData, { onConflict: 'product_id,shopify_variant_id' }).select('id, price, compare_at_price').single();
-      if (variantErr || !upsertedVariant) { await log('warn', `Failed to upsert variant ${variant.id}: ${variantErr?.message}`); continue; }
+      if (variantErr || !upsertedVariant) continue;
 
       const { data: latestHistory } = await supabaseAdmin.from('variant_price_history').select('price, compare_at_price').eq('variant_id', upsertedVariant.id).order('recorded_at', { ascending: false }).limit(1).single();
-
       const newPrice = upsertedVariant.price;
       const newCompareAt = upsertedVariant.compare_at_price;
 
       if (!latestHistory) {
         await supabaseAdmin.from('variant_price_history').insert({
           user_id: userId, product_id: productId, variant_id: upsertedVariant.id, store_id: storeId,
-          store_handle: storeHandle, shopify_variant_id: String(variant.id), variant_sku: variant.sku || null,
-          variant_title: variant.title || null, price: newPrice, compare_at_price: newCompareAt,
-          previous_price: null, previous_compare_at_price: null, price_delta: null, price_delta_pct: null,
-          compare_at_price_delta: null, price_changed: false, compare_at_price_changed: false, scrape_run_id: scrapeRunId,
+          store_handle: storeHandle, shopify_variant_id: String(variant.id),
+          variant_sku: variant.sku || null, variant_title: variant.title || null,
+          price: newPrice, compare_at_price: newCompareAt,
+          previous_price: null, previous_compare_at_price: null,
+          price_delta: null, price_delta_pct: null, compare_at_price_delta: null,
+          price_changed: false, compare_at_price_changed: false, scrape_run_id: scrapeRunId,
         });
       } else {
         const priceChanged = latestHistory.price !== newPrice;
@@ -275,331 +316,360 @@ Deno.serve(async (req) => {
           const compareDelta = newCompareAt != null && latestHistory.compare_at_price != null ? newCompareAt - latestHistory.compare_at_price : null;
           await supabaseAdmin.from('variant_price_history').insert({
             user_id: userId, product_id: productId, variant_id: upsertedVariant.id, store_id: storeId,
-            store_handle: storeHandle, shopify_variant_id: String(variant.id), variant_sku: variant.sku || null,
-            variant_title: variant.title || null, price: newPrice, compare_at_price: newCompareAt,
+            store_handle: storeHandle, shopify_variant_id: String(variant.id),
+            variant_sku: variant.sku || null, variant_title: variant.title || null,
+            price: newPrice, compare_at_price: newCompareAt,
             previous_price: latestHistory.price, previous_compare_at_price: latestHistory.compare_at_price,
             price_delta: delta, price_delta_pct: deltaPct, compare_at_price_delta: compareDelta,
             price_changed: priceChanged, compare_at_price_changed: compareChanged, scrape_run_id: scrapeRunId,
           });
           if (priceChanged) {
             totalPriceChanges++;
-            const oldPriceStr = latestHistory.price != null ? `$${Number(latestHistory.price).toFixed(2)}` : 'N/A';
-            const newPriceStr = newPrice != null ? `$${Number(newPrice).toFixed(2)}` : 'N/A';
-            const pctStr = deltaPct != null ? ` (${(deltaPct * 100).toFixed(1)}%)` : '';
-            await log('price_change', `${product.title} — ${variant.title}: ${oldPriceStr} → ${newPriceStr}${pctStr}`,
-              { product_id: productId, variant_id: upsertedVariant.id, old_price: latestHistory.price, new_price: newPrice, delta, delta_pct: deltaPct, store_handle: storeHandle });
+            await supabaseAdmin.from('scrape_logs').insert({
+              scrape_run_id: scrapeRunId, user_id: userId, store_id: storeId,
+              level: 'price_change',
+              message: `${product.title} — ${variant.title}: $${Number(latestHistory.price).toFixed(2)} → $${Number(newPrice).toFixed(2)}`,
+              metadata: { product_id: productId, old_price: latestHistory.price, new_price: newPrice, delta, store_handle: storeHandle },
+            });
           }
         }
       }
     }
-
     totalProducts++;
   }
 
-  // ── Shopify: paginate a single products endpoint ──────────────────────────
-  async function paginateProductsEndpoint(
-    startUrl: string,
-    collectionHandle?: string,
-    label?: string,
-  ): Promise<number> {
-    let nextUrl: string | null = startUrl;
-    let useLinkHeader = true;
+  // ── Strategy A: products.json pagination ─────────────────────────────────
+  async function strategyA_productsJson(
+    endpointUrl: string,
+    collectionHandle: string,
+    checkSkip: () => boolean,
+  ): Promise<{ count: number; error: string | null; autoRecovered?: boolean }> {
     let page = 1;
-    let fetched = 0;
+    let nextUrl: string | null = endpointUrl;
+    let useLinkHeader = true;
+    let count = 0;
+    const t0 = Date.now();
 
     while (nextUrl) {
-      if (await checkCancelled()) return fetched;
-      await log('info', `[${label ?? collectionHandle ?? 'products'}] page ${page} — ${totalProducts} total so far`);
-
-      let response: Response;
-      try {
-        response = await fetchWithRetry(nextUrl, authHeaders);
-      } catch (err) {
-        await log('error', `Fetch failed on page ${page}: ${String(err)}`);
-        await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Fetch failed on page ${page}: ${String(err)}`, url: nextUrl, raw_error: String(err) });
-        throw err;
+      if (checkSkip() || await isRunCancelled()) break;
+      if (Date.now() - t0 > COLLECTION_TIMEOUT_MS) {
+        return { count, error: 'timeout:collection', autoRecovered: false };
       }
 
-      if (response.status === 429) {
-        await emitEvent({ stage: 'rate_limited', severity: 'warning', message: `Rate limited on page ${page} for ${store.name}`, url: nextUrl, reason_code: 'http_429' });
-      }
-      if (response.status === 404) { await log('info', `404 on page ${page} — treating as end`); break; }
-      if (!response.ok) throw new Error(`HTTP ${response.status} on page ${page}`);
+      const { res, error: fetchErr, reasonCode, attempt } = await retryFetch(nextUrl, authHeaders, checkSkip, `[A] ${collectionHandle} p${page}`);
+      if (!res) return { count, error: fetchErr ?? 'no_response', autoRecovered: false };
+      if (!res.ok) return { count, error: `HTTP ${res.status}`, autoRecovered: false };
 
-      const data = await response.json();
+      let data: any;
+      try { data = await res.json(); }
+      catch { return { count, error: 'invalid_json', autoRecovered: false }; }
+
       const products: any[] = data.products || [];
-      pageCount++;
-      fetched += products.length;
+      pagesVisited++;
+      count += products.length;
 
-      // Emit per-page event for pagination auditing
       await emitEvent({
-        stage: 'page_fetched',
-        severity: 'info',
-        message: `Page ${page} — ${label ?? collectionHandle ?? 'products.json'} — ${products.length} products`,
-        url: nextUrl,
-        source_platform: scrapeStrategy,
+        stage: 'page_fetched', severity: 'info',
+        message: `[A] ${collectionHandle} — page ${page} — ${products.length} products`,
+        url: nextUrl, collection_handle: collectionHandle, strategy_name: 'products_json',
+        attempt_number: attempt, duration_ms: Date.now() - t0,
       });
-      await incrementPagesVisited(1);
+      await supabaseAdmin.from('scrape_runs').update({ pages_visited: pagesVisited }).eq('id', scrapeRunId);
 
       if (products.length === 0) break;
 
-      const linkHeader = response.headers.get('link') || '';
-      const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-      if (nextMatch && useLinkHeader) { nextUrl = nextMatch[1]; }
-      else if (products.length === 250 && !useLinkHeader) { page++; nextUrl = `${startUrl.split('?')[0]}?limit=250&page=${page}`; }
-      else if (products.length === 250 && useLinkHeader && !nextMatch) { useLinkHeader = false; page = 2; nextUrl = `${startUrl.split('?')[0]}?limit=250&page=${page}`; }
-      else { nextUrl = null; }
-
       for (const product of products) {
+        if (checkSkip()) break;
         if (maxProducts > 0 && totalProducts >= maxProducts) { nextUrl = null; break; }
         await processProduct(product, baseUrl, collectionHandle);
       }
-      if (nextUrl) await sleep(interPageDelay);
+
+      // Advance pagination
+      const linkHeader = res.headers.get('link') || '';
+      const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+      if (nextMatch && useLinkHeader) {
+        nextUrl = nextMatch[1];
+      } else if (products.length === 250 && useLinkHeader && !nextMatch) {
+        useLinkHeader = false; page = 2;
+        nextUrl = `${endpointUrl.split('?')[0]}?limit=250&page=${page}`;
+      } else if (products.length === 250 && !useLinkHeader) {
+        page++;
+        nextUrl = `${endpointUrl.split('?')[0]}?limit=250&page=${page}`;
+      } else {
+        nextUrl = null;
+      }
+
+      if (nextUrl) await sleep(Math.max(interPageDelay, 2000));
       page++;
     }
 
-    // Emit pagination_complete for this collection/endpoint
-    await emitEvent({
-      stage: 'pagination_complete',
-      severity: 'info',
-      message: `Pagination complete — ${page - 1} pages — ${label ?? collectionHandle ?? 'products.json'} — ${fetched} products`,
-      url: startUrl,
-      source_platform: scrapeStrategy,
-    });
-
-    return fetched;
+    return { count, error: null, autoRecovered: false };
   }
 
-  // ── Shopify: discover all collections then scrape each ────────────────────
-  async function scrapeShopifyWithCollections(): Promise<boolean> {
-    // Step 1: Try to fetch all collections
-    const collectionsUrl = `${baseUrl}/collections.json?limit=250`;
-    let collections: Array<{ handle: string; title: string }> = [];
-    let collectionsFetched = false;
+  // ── Strategy B: HTML collection page — extract product links ─────────────
+  async function strategyB_collectionHtml(
+    collectionHandle: string,
+    checkSkip: () => boolean,
+  ): Promise<{ count: number; error: string | null }> {
+    const url = `${baseUrl}/collections/${collectionHandle}`;
+    const { res, error: fetchErr } = await retryFetch(url, { ...authHeaders, Accept: 'text/html' }, checkSkip, `[B] ${collectionHandle}`);
+    if (!res || !res.ok) return { count: 0, error: fetchErr ?? `HTTP ${res?.status}` };
 
-    try {
-      const collRes = await fetchWithRetry(collectionsUrl, authHeaders);
-      if (collRes.ok) {
-        const collData = await collRes.json();
-        if (Array.isArray(collData.collections) && collData.collections.length > 0) {
-          collections = collData.collections.map((c: any) => ({ handle: c.handle, title: c.title }));
-          collectionsFetched = true;
-          await log('info', `Discovered ${collections.length} collections via /collections.json`);
-          await emitEvent({
-            stage: 'category_discovery_started',
-            severity: 'info',
-            message: `Discovered ${collections.length} collections for ${store.name}`,
-            url: collectionsUrl,
-          });
-        }
-      }
-    } catch (err) {
-      await log('warn', `collections.json fetch failed: ${String(err)} — will fall back to products.json`);
-    }
+    const html = await res.text();
+    // Extract product handles from HTML href="/products/handle"
+    const handleMatches = [...html.matchAll(/href="\/products\/([a-z0-9\-_]+)"/g)].map(m => m[1]);
+    const uniqueHandles = [...new Set(handleMatches)];
+    if (uniqueHandles.length === 0) return { count: 0, error: 'selector_missing' };
 
-    if (!collectionsFetched || collections.length === 0) {
-      // No collections found — fall back to flat products.json
-      return false;
-    }
-
-    // Step 2: Scrape each collection
-    let collectionsScraped = 0;
-    for (const col of collections) {
-      if (maxProducts > 0 && totalProducts >= maxProducts) break;
-      if (await checkCancelled()) break;
-
-      const colUrl = `${baseUrl}/collections/${col.handle}/products.json?limit=250`;
+    let count = 0;
+    for (const handle of uniqueHandles) {
+      if (checkSkip()) break;
       try {
-        await paginateProductsEndpoint(colUrl, col.handle, col.title);
-        collectionsScraped++;
-      } catch (err) {
-        await log('warn', `Collection ${col.handle} failed: ${String(err)}`);
-        await emitEvent({ stage: 'category_discovery_failed', severity: 'warning', message: `Collection ${col.handle} scrape failed: ${String(err)}`, url: colUrl, raw_error: String(err) });
-      }
-      await sleep(interPageDelay);
+        const productUrl = `${baseUrl}/products/${handle}.json`;
+        const { res: pRes } = await retryFetch(productUrl, authHeaders, checkSkip, `[B] product ${handle}`);
+        if (!pRes || !pRes.ok) continue;
+        const d = await pRes.json();
+        if (d?.product) { await processProduct(d.product, baseUrl, collectionHandle); count++; }
+        await sleep(1500);
+      } catch { /* skip individual */ }
     }
-
-    await emitEvent({
-      stage: 'category_discovery_completed',
-      severity: 'info',
-      message: `Collection traversal complete — ${collectionsScraped}/${collections.length} collections scraped — ${totalProducts} unique products`,
-      url: baseUrl,
-    });
-
-    return true;
+    return { count, error: null };
   }
 
-  try {
-    await log('info', `Probing ${store.name} — using ${scrapeStrategy} strategy`);
+  // ── Strategy C: sitemap-discovered URLs ───────────────────────────────────
+  async function strategyC_sitemapUrls(
+    collectionHandle: string,
+    checkSkip: () => boolean,
+  ): Promise<{ count: number; error: string | null }> {
+    // Probe the sitemap for product handles matching this collection
+    const sitemapUrls = [`${baseUrl}/sitemap.xml`, `${baseUrl}/sitemap_products_1.xml`];
+    let productHandles: string[] = [];
 
-    let effectiveStrategy = scrapeStrategy;
-    if (scrapeStrategy === 'password_protected') {
-      await log('info', `Store is password-protected. Authenticating with saved credentials.`);
-      if (!store.auth_cookie) {
-        await emitEvent({ stage: 'auth_blocked', severity: 'critical', message: `No auth cookie for password-protected store ${store.name}`, reason_code: 'missing_auth_cookie' });
-        throw new Error('No auth cookie found. Please re-authenticate the store before scraping.');
-      }
-      effectiveStrategy = 'products_json';
+    for (const sitemapUrl of sitemapUrls) {
+      try {
+        const { res } = await retryFetch(sitemapUrl, { Accept: 'text/xml,application/xml' }, checkSkip, `[C] sitemap`);
+        if (res?.ok) {
+          const text = await res.text();
+          const matches = text.match(/\/products\/([a-z0-9\-_]+)/g) || [];
+          productHandles = [...new Set(matches.map(m => m.replace('/products/', '')))];
+          break;
+        }
+      } catch { /* try next */ }
     }
 
-    // ── Strategy: products_json — try collections first, fall back to flat ───
-    if (effectiveStrategy === 'products_json' || effectiveStrategy === 'password_protected') {
-      // Attempt Shopify collection traversal (primary method)
-      const usedCollections = await scrapeShopifyWithCollections();
+    if (productHandles.length === 0) return { count: 0, error: 'empty_response' };
 
-      if (!usedCollections) {
-        // Fallback: flat /products.json pagination
-        await log('info', `Falling back to flat /products.json for ${store.name}`);
-        await emitEvent({ stage: 'category_discovery_failed', severity: 'warning', message: `No collections found — using flat products.json fallback`, url: `${baseUrl}/collections.json` });
-        await paginateProductsEndpoint(`${baseUrl}/products.json?limit=250`, undefined, 'products.json (flat fallback)');
-      }
+    let count = 0;
+    for (const handle of productHandles) {
+      if (checkSkip() || (maxProducts > 0 && totalProducts >= maxProducts)) break;
+      try {
+        const { res } = await retryFetch(`${baseUrl}/products/${handle}.json`, authHeaders, checkSkip, `[C] product ${handle}`);
+        if (!res?.ok) continue;
+        const d = await res.json();
+        if (d?.product) { await processProduct(d.product, baseUrl, collectionHandle); count++; }
+        await sleep(1500);
+      } catch { /* skip */ }
+    }
+    return { count, error: null };
+  }
 
-      // Handle stores that returned 0 products — diagnose
-      if (totalProducts === 0) {
-        // Try alternative endpoints
-        const altEndpoints = [
-          `${baseUrl}/products.json?limit=5`,
-          `${baseUrl}/collections/all/products.json?limit=5`,
-        ];
-        let altWorked = false;
-        for (const ep of altEndpoints) {
-          try {
-            const probe = await fetchWithRetry(ep, authHeaders);
-            if (probe.ok) {
-              const d = await probe.json();
-              if (Array.isArray(d.products) && d.products.length > 0) {
-                altWorked = true;
-                await log('warn', `Alternative endpoint ${ep} returned products — previous fetch may have been rate-limited`);
-                break;
-              }
-            } else if (probe.status === 401 || probe.status === 403) {
-              await emitEvent({ stage: 'auth_blocked', severity: 'error', message: `Auth-gated response (HTTP ${probe.status}) from ${ep}`, url: ep, reason_code: `http_${probe.status}` });
-              break;
-            }
-          } catch { /* ignore */ }
-        }
+  // ── Per-collection state machine ──────────────────────────────────────────
+  async function scrapeCollection(col: { handle: string; title: string }): Promise<CollectionState> {
+    const t0 = Date.now();
+    let state: CollectionState = 'running';
+    let currentStrategy: Strategy = 'products_json';
 
-        if (!altWorked) {
-          await emitEvent({
-            stage: 'product_extraction_failed',
-            severity: 'error',
-            message: `All product endpoints returned empty or blocked for ${store.name}. Store may be unreachable, auth-required, or have no products.`,
-            url: baseUrl,
-            reason_code: 'all_endpoints_empty',
-          });
-          await supabaseAdmin.from('stores').update({ store_status: 'unreachable' }).eq('id', storeId);
-        }
-      }
+    // Check skip before we even start
+    if (await isCollectionSkipRequested()) {
+      await supabaseAdmin.from('scrape_run_stores').update({ skip_requested: false }).eq('id', runStoreId);
+      return 'skipped';
     }
 
-    // ── Strategy: collections_json ───────────────────────────────────────────
-    else if (effectiveStrategy === 'collections_json') {
-      const collectionBases = [`${baseUrl}/collections/all/products.json`, `${baseUrl}/collections/frontpage/products.json`];
-      let successBase: string | null = null;
-      for (const base of collectionBases) {
-        try {
-          const probe = await fetchWithRetry(`${base}?limit=1`, authHeaders);
-          if (probe.ok) { const d = await probe.json(); if (d && Array.isArray(d.products)) { successBase = base; break; } }
-        } catch { /* try next */ }
-      }
-      if (!successBase) {
-        await emitEvent({ stage: 'category_discovery_failed', severity: 'error', message: `collections_json: neither all nor frontpage collection accessible for ${store.name}`, reason_code: 'collections_404' });
-        throw new Error('collections_json: neither all nor frontpage collection accessible');
-      }
+    await updateProgress({ current_collection: col.handle, current_strategy: 'products_json' });
 
-      await paginateProductsEndpoint(`${successBase}?limit=250`, 'all', 'collections/all');
-    }
+    const strategies: Strategy[] = ['products_json', 'collection_html', 'sitemap_urls', 'skip'];
 
-    // ── Strategy: sitemap_handles ────────────────────────────────────────────
-    else if (effectiveStrategy === 'sitemap_handles') {
-      await log('warn', `Sitemap strategy active for ${store.name} — fetching handles individually (slow)`);
+    for (const strategy of strategies) {
+      if (isStoreAborted() || await isRunCancelled()) return 'skipped';
 
-      // Try multiple sitemap locations
-      const sitemapUrls = [
-        `${baseUrl}/sitemap.xml`,
-        `${baseUrl}/sitemap_products_1.xml`,
-      ];
-
-      let sitemapText: string | null = null;
-      let foundSitemapUrl: string | null = null;
-
-      for (const sitemapUrl of sitemapUrls) {
-        try {
-          const sitemapRes = await fetchWithRetry(sitemapUrl, { ...authHeaders, Accept: 'text/xml,application/xml;q=0.9' });
-          if (sitemapRes.ok) {
-            sitemapText = await sitemapRes.text();
-            foundSitemapUrl = sitemapUrl;
-            break;
-          }
-        } catch { /* try next */ }
+      // Check operator skip between strategy attempts
+      if (await isCollectionSkipRequested()) {
+        await supabaseAdmin.from('scrape_run_stores').update({ skip_requested: false }).eq('id', runStoreId);
+        await emitEvent({
+          stage: 'collection_skipped', severity: 'info',
+          message: `${col.handle} skipped by operator after trying ${currentStrategy}`,
+          collection_handle: col.handle, strategy_name: strategy,
+          was_operator_action: true,
+        });
+        return 'skipped';
       }
 
-      if (!sitemapText || !foundSitemapUrl) {
-        await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Sitemap not found at any known location for ${store.name}`, url: `${baseUrl}/sitemap.xml`, reason_code: 'sitemap_not_found' });
-        await supabaseAdmin.from('stores').update({ store_status: 'unreachable', sitemap_found: false }).eq('id', storeId);
-        throw new Error('Sitemap not found');
+      currentStrategy = strategy;
+      await updateProgress({ current_strategy: strategy });
+
+      if (strategy === 'skip') {
+        await emitEvent({
+          stage: 'collection_skipped', severity: 'warning',
+          message: `All strategies exhausted for ${col.handle} — marking as skipped`,
+          collection_handle: col.handle, strategy_name: 'skip',
+          reason_code: 'max_retries_exceeded', duration_ms: Date.now() - t0,
+        });
+        return 'skipped';
       }
 
-      const handleMatches = sitemapText.match(/\/products\/([a-z0-9\-]+)/g) || [];
-      const uniqueHandles = [...new Set(handleMatches.map(m => m.replace('/products/', '')))];
-
-      if (uniqueHandles.length === 0) {
-        await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Sitemap found but contains no product URLs for ${store.name}`, url: foundSitemapUrl, reason_code: 'sitemap_no_products' });
-        await supabaseAdmin.from('stores').update({ store_status: 'partial', sitemap_found: true, sitemap_url: foundSitemapUrl }).eq('id', storeId);
-        throw new Error('Sitemap found but no product handles detected');
+      if (strategy !== 'products_json') {
+        await emitEvent({
+          stage: 'strategy_fallback', severity: 'warning',
+          message: `Falling back to ${strategy} for collection ${col.handle}`,
+          collection_handle: col.handle, strategy_name: strategy,
+          reason_code: 'strategy_fallback_success',
+          was_auto_recovered: true, duration_ms: Date.now() - t0,
+        });
       }
 
-      await log('warn', `Sitemap strategy: found ${uniqueHandles.length} handles at ${foundSitemapUrl}`);
-      await supabaseAdmin.from('stores').update({ sitemap_found: true, sitemap_url: foundSitemapUrl }).eq('id', storeId);
+      const checkSkip = () => isStoreAborted();
 
-      const totalHandles = uniqueHandles.length;
-      let handleIndex = 0;
-      for (const handle of uniqueHandles) {
-        if (maxProducts > 0 && totalProducts >= maxProducts) break;
-        if (await checkCancelled()) {
-          await supabaseAdmin.from('scrape_run_stores').update({ status: 'cancelled', finished_at: new Date().toISOString(), page_count: pageCount, product_count: totalProducts, price_changes: totalPriceChanges }).eq('id', runStoreId);
-          return new Response(JSON.stringify({ cancelled: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-        handleIndex++;
-        await log('info', `strategy: sitemap_handles — fetching handle ${handleIndex}/${totalHandles}`);
-        try {
-          const productUrl = `${baseUrl}/products/${handle}.json`;
-          const productRes = await fetchWithRetry(productUrl, authHeaders);
-          if (!productRes.ok) continue;
-          const productData = await productRes.json();
-          if (!productData?.product) continue;
-          pageCount++;
-          await incrementPagesVisited(1);
-          await processProduct(productData.product, baseUrl);
-        } catch (err) {
-          await log('warn', `Sitemap: failed to fetch handle ${handle}: ${String(err)}`);
-          await emitEvent({ stage: 'detail_fetch_failed', severity: 'warning', message: `Sitemap handle fetch failed: ${handle}`, url: `${baseUrl}/products/${handle}`, raw_error: String(err) });
-        }
-        await sleep(Math.max(interPageDelay, 500));
+      let result: { count: number; error: string | null; autoRecovered?: boolean };
+      if (strategy === 'products_json') {
+        const colUrl = `${baseUrl}/collections/${col.handle}/products.json?limit=250`;
+        result = await strategyA_productsJson(colUrl, col.handle, checkSkip);
+      } else if (strategy === 'collection_html') {
+        result = await strategyB_collectionHtml(col.handle, checkSkip);
+      } else {
+        // sitemap_urls
+        result = await strategyC_sitemapUrls(col.handle, checkSkip);
       }
 
+      if (!result.error) {
+        const wasRecovered = strategy !== 'products_json';
+        await emitEvent({
+          stage: 'collection_completed', severity: 'info',
+          message: `${col.handle} — ${result.count} products via ${strategy}`,
+          collection_handle: col.handle, strategy_name: strategy,
+          duration_ms: Date.now() - t0,
+          was_auto_recovered: wasRecovered,
+        });
+        return 'success';
+      }
+
+      // Error — log it and try next strategy
+      const reasonCode = classifyError(result.error);
       await emitEvent({
-        stage: 'pagination_complete',
-        severity: 'info',
-        message: `Sitemap traversal complete — ${handleIndex} handles attempted — ${totalProducts} products saved`,
-        url: foundSitemapUrl,
+        stage: 'collection_strategy_failed', severity: 'warning',
+        message: `${col.handle} — ${strategy} failed: ${result.error}`,
+        collection_handle: col.handle, strategy_name: strategy,
+        reason_code: reasonCode, raw_error: result.error,
+        duration_ms: Date.now() - t0,
       });
     }
 
-    // ── Finalize ─────────────────────────────────────────────────────────────
+    return 'failed';
+  }
+
+  // ── Main run logic ────────────────────────────────────────────────────────
+  let storeTerminal: StoreTerminal = 'completed';
+
+  try {
+    await emitEvent({ stage: 'run_started', severity: 'info', message: `Run started for ${store.name}`, strategy_name: 'products_json' });
+
+    // Discover all collections
+    const collectionsUrl = `${baseUrl}/collections.json?limit=250`;
+    let collections: Array<{ handle: string; title: string }> = [];
+
+    try {
+      const { res } = await retryFetch(collectionsUrl, authHeaders, makeCheckSkip(false), 'collections.json');
+      if (res?.ok) {
+        const d = await res.json();
+        if (Array.isArray(d.collections) && d.collections.length > 0) {
+          collections = d.collections.map((c: any) => ({ handle: c.handle, title: c.title }));
+        }
+      }
+    } catch { /* fall through */ }
+
+    // Fallback: use 'all' collection if no collections found
+    if (collections.length === 0) {
+      collections = [
+        { handle: 'all', title: 'All Products' },
+        { handle: 'frontpage', title: 'Front Page' },
+      ];
+      await emitEvent({ stage: 'category_discovery_failed', severity: 'warning', message: `No collections discovered via /collections.json — using fallback collection list`, url: collectionsUrl });
+    } else {
+      await emitEvent({ stage: 'category_discovery_completed', severity: 'info', message: `Discovered ${collections.length} collections for ${store.name}`, url: collectionsUrl });
+    }
+
+    await updateProgress({ collections_total: collections.length });
+
+    // Scrape each collection through the state machine
+    for (const col of collections) {
+      if (isStoreAborted()) {
+        const abortReason = storeAbort.signal.reason;
+        storeTerminal = abortReason === 'store_timeout' ? 'timed_out' : 'cancelled';
+        break;
+      }
+      if (await isRunCancelled()) { storeTerminal = 'cancelled'; break; }
+      if (maxProducts > 0 && totalProducts >= maxProducts) break;
+
+      const colState = await scrapeCollection(col);
+
+      if (colState === 'success') {
+        collectionsCompleted++;
+      } else if (colState === 'skipped') {
+        collectionsSkipped++;
+      } else {
+        collectionsFailed++;
+      }
+
+      await updateProgress({
+        collections_completed: collectionsCompleted,
+        collections_skipped: collectionsSkipped,
+        collections_failed: collectionsFailed,
+      });
+
+      // Inter-collection delay
+      if (!isStoreAborted()) await sleep(INTER_COLLECTION_DELAY);
+    }
+
+    // Emit batched quality warnings (one per store, not per product)
+    if (missingImage.length > 0) {
+      await emitEvent({ stage: 'image_missing_summary', severity: 'warning', message: `${missingImage.length} products missing images for ${store.name}`, reason_code: 'no_images' });
+    }
+    if (missingPrice.length > 0) {
+      await emitEvent({ stage: 'price_missing_summary', severity: 'warning', message: `${missingPrice.length} products missing prices for ${store.name}`, reason_code: 'no_variants_with_price' });
+    }
+    if (missingDesc.length > 0) {
+      await emitEvent({ stage: 'description_missing_summary', severity: 'warning', message: `${missingDesc.length} products missing descriptions for ${store.name}`, reason_code: 'empty_body_html' });
+    }
+
+    // Determine final terminal status
+    if (storeTerminal === 'completed' && (collectionsSkipped > 0 || collectionsFailed > 0)) {
+      storeTerminal = 'completed_with_skips';
+    }
+
+    // Persist store + metrics
     await supabaseAdmin.from('stores').update({ last_scraped_at: new Date().toISOString(), total_products: totalProducts }).eq('id', storeId);
 
     const { data: avgData } = await supabaseAdmin.from('products').select('price_min').eq('store_id', storeId).eq('user_id', userId);
-    const avgPriceMin = avgData && avgData.length > 0 ? avgData.reduce((acc: number, p: any) => acc + (p.price_min || 0), 0) / avgData.length : null;
-
+    const avgPriceMin = avgData?.length ? avgData.reduce((a: number, p: any) => a + (p.price_min || 0), 0) / avgData.length : null;
     await supabaseAdmin.from('store_metrics_history').insert({ user_id: userId, store_id: storeId, total_products: totalProducts, price_changes: totalPriceChanges, avg_price_min: avgPriceMin });
 
+    const statusMap: Record<StoreTerminal, string> = {
+      completed: 'completed', completed_with_skips: 'completed',
+      failed: 'error', cancelled: 'cancelled', timed_out: 'error',
+    };
+
     await supabaseAdmin.from('scrape_run_stores').update({
-      status: 'completed', finished_at: new Date().toISOString(), page_count: pageCount,
-      product_count: totalProducts, price_changes: totalPriceChanges,
-      message: `${totalProducts} products, ${totalPriceChanges} price changes`,
+      status: statusMap[storeTerminal],
+      terminal_status: storeTerminal,
+      finished_at: new Date().toISOString(),
+      page_count: pagesVisited,
+      product_count: totalProducts,
+      price_changes: totalPriceChanges,
+      current_collection: null,
+      current_strategy: null,
+      message: `${totalProducts} products, ${totalPriceChanges} price changes, ${collectionsSkipped} skipped`,
     }).eq('id', runStoreId);
 
+    // Update run totals
     const { data: runData } = await supabaseAdmin.from('scrape_runs').select('total_products, total_price_changes, completed_stores, pages_visited').eq('id', scrapeRunId).single();
     if (runData) {
       await supabaseAdmin.from('scrape_runs').update({
@@ -611,16 +681,24 @@ Deno.serve(async (req) => {
       }).eq('id', scrapeRunId);
     }
 
-    await log('info', `Completed ${store.name}: ${totalProducts} products, ${totalPriceChanges} price changes, ${pagesVisited} pages visited`);
-    await emitEvent({ stage: 'run_completed', severity: 'info', message: `Run completed for ${store.name}: ${totalProducts} products, ${totalPriceChanges} price changes, ${pagesVisited} pages` });
+    await emitEvent({
+      stage: 'run_completed', severity: 'info',
+      message: `${store.name} ${storeTerminal}: ${totalProducts} products, ${collectionsCompleted} collections ok, ${collectionsSkipped} skipped, ${collectionsFailed} failed`,
+      strategy_name: storeTerminal,
+    });
 
-    return new Response(JSON.stringify({ success: true, totalProducts, totalPriceChanges, pageCount, pagesVisited }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    clearTimeout(storeTimeout);
+    return new Response(JSON.stringify({ success: true, totalProducts, totalPriceChanges, pagesVisited, storeTerminal }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
-    await log('error', `Fatal error scraping ${store.name}: ${String(err)}`);
-    await emitEvent({ stage: 'run_failed', severity: 'critical', message: `Fatal error scraping ${store.name}: ${String(err)}`, raw_error: String(err) });
-    await supabaseAdmin.from('scrape_run_stores').update({ status: 'error', finished_at: new Date().toISOString(), page_count: pageCount, product_count: totalProducts, price_changes: totalPriceChanges, message: String(err) }).eq('id', runStoreId);
-
+    clearTimeout(storeTimeout);
+    await emitEvent({ stage: 'run_failed', severity: 'critical', message: `Fatal error: ${String(err)}`, raw_error: String(err), reason_code: 'unknown_error' });
+    await supabaseAdmin.from('scrape_run_stores').update({
+      status: 'error', terminal_status: 'failed',
+      finished_at: new Date().toISOString(),
+      page_count: pagesVisited, product_count: totalProducts, price_changes: totalPriceChanges,
+      message: String(err),
+    }).eq('id', runStoreId);
     const { data: runData } = await supabaseAdmin.from('scrape_runs').select('error_count, completed_stores, pages_visited').eq('id', scrapeRunId).single();
     if (runData) {
       await supabaseAdmin.from('scrape_runs').update({
