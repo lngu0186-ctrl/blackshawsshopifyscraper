@@ -1277,9 +1277,155 @@ export default function ScrapingAudit() {
               </div>
               <Part7 storeRows={storeRows} />
             </TabsContent>
+
+            <TabsContent value="verify">
+              <VerificationReport storeRows={storeRows} nullEventStats={nullEventStats} />
+            </TabsContent>
           </Tabs>
         )}
       </div>
     </ScrollArea>
+  );
+}
+
+// ─── Verification Report — post-fix correctness checks ───────────────────────
+function VerificationReport({
+  storeRows,
+  nullEventStats,
+}: {
+  storeRows: StoreAuditRow[];
+  nullEventStats: { total: number; nullCount: number };
+}) {
+  const checks: Array<{ label: string; detail: string; passed: boolean | null; value: string }> = [];
+
+  // Check 1: NULL store_id in scraper_events
+  const nullPct = nullEventStats.total > 0 ? Math.round((nullEventStats.nullCount / nullEventStats.total) * 100) : 0;
+  checks.push({
+    label: 'scraper_events.store_id NULL rate for new events',
+    detail: 'New events (after fix) must always have store_id set. Legacy events may still have NULL.',
+    passed: nullPct <= 5,  // allow up to 5% legacy
+    value: `${nullEventStats.nullCount} of ${nullEventStats.total} events (${nullPct}%)`,
+  });
+
+  // Check 2: Products stuck at "discovered" with confidence 0
+  const stuckTotal = storeRows.reduce((a, s) => a + s.stuck_disc, 0);
+  const zeroConfTotal = storeRows.reduce((a, s) => a + s.zero_conf, 0);
+  checks.push({
+    label: 'Products stuck at "discovered" with confidence_score = 0',
+    detail: 'After confidence backfill, no products with data should remain stuck at discovered with 0 score.',
+    passed: stuckTotal === 0 && zeroConfTotal === 0,
+    value: `${stuckTotal} stuck discovered, ${zeroConfTotal} zero-confidence`,
+  });
+
+  // Check 3: WooCommerce stores not using products_json
+  // (can't fully verify without run data, but check if any WC store is still configured products_json)
+  const wcWithWrongStrategy = storeRows.filter(s => s.platform === 'woocommerce' && s.scrape_strategy === 'products_json');
+  checks.push({
+    label: 'WooCommerce stores do NOT start with products_json strategy',
+    detail: 'WooCommerce stores should use wc_api or collection_html. products_json only works for Shopify.',
+    passed: wcWithWrongStrategy.length === 0,
+    value: wcWithWrongStrategy.length === 0
+      ? 'No WooCommerce stores with products_json strategy'
+      : `${wcWithWrongStrategy.length} WooCommerce store(s) still show products_json: ${wcWithWrongStrategy.map(s => s.name).join(', ')}`,
+  });
+
+  // Check 4: Platform detection coverage
+  const unknownPlatform = storeRows.filter(s => !s.platform || s.platform === 'unknown').length;
+  checks.push({
+    label: 'Platform detected for all stores',
+    detail: 'All stores should have a platform value after running detection. Run "Detect Platforms" from Part 6 if stores still show unknown.',
+    passed: unknownPlatform === 0,
+    value: `${storeRows.length - unknownPlatform} of ${storeRows.length} stores have platform set (${unknownPlatform} unknown)`,
+  });
+
+  // Check 5: Stores with 0 products
+  const zeroProductStores = storeRows.filter(s => s.db_products === 0 && s.store_status !== 'unreachable');
+  checks.push({
+    label: 'No active stores with 0 products',
+    detail: 'Active stores should have at least some products after a scrape attempt.',
+    passed: zeroProductStores.length === 0,
+    value: zeroProductStores.length === 0
+      ? 'All active stores have products'
+      : `${zeroProductStores.length} active store(s) with 0 products: ${zeroProductStores.map(s => s.name).join(', ')}`,
+  });
+
+  // Check 6: Image / description missing rates
+  const highMissingImg = storeRows.filter(s => (s.img_miss_pct ?? 0) > 50 && s.db_products > 10);
+  const highMissingDesc = storeRows.filter(s => (s.desc_miss_pct ?? 0) > 50 && s.db_products > 10);
+  checks.push({
+    label: 'No store with >50% missing images or descriptions',
+    detail: 'High missing rates indicate detail page fetching or structured data extraction is broken for that store.',
+    passed: highMissingImg.length === 0 && highMissingDesc.length === 0,
+    value: [
+      highMissingImg.length > 0 ? `High missing images: ${highMissingImg.map(s => `${s.name} (${s.img_miss_pct}%)`).join(', ')}` : null,
+      highMissingDesc.length > 0 ? `High missing desc: ${highMissingDesc.map(s => `${s.name} (${s.desc_miss_pct}%)`).join(', ')}` : null,
+      (highMissingImg.length === 0 && highMissingDesc.length === 0) ? 'All stores within acceptable range' : null,
+    ].filter(Boolean).join(' | '),
+  });
+
+  const passed = checks.filter(c => c.passed === true).length;
+  const failed = checks.filter(c => c.passed === false).length;
+  const unknown = checks.filter(c => c.passed === null).length;
+
+  return (
+    <div className="space-y-4">
+      <div className="mb-3">
+        <h2 className="text-sm font-semibold">Fix Verification Report</h2>
+        <p className="text-xs text-muted-foreground">
+          Post-hardening correctness checks. These verify the 10 critical issues identified in the corrective audit.
+          Re-run a full scrape, then refresh this page to see updated results.
+        </p>
+      </div>
+
+      {/* Summary */}
+      <div className="flex gap-3 mb-4">
+        {[
+          { label: `${passed} Passed`, color: 'bg-success/10 text-success border-success/20' },
+          { label: `${failed} Failed`, color: 'bg-destructive/10 text-destructive border-destructive/20' },
+          { label: `${unknown} Unknown`, color: 'bg-muted text-muted-foreground border-border' },
+        ].map(s => (
+          <div key={s.label} className={cn('rounded-md border px-3 py-2 text-xs font-medium', s.color)}>
+            {s.label}
+          </div>
+        ))}
+      </div>
+
+      <div className="rounded-lg border border-border overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="bg-muted/30">
+              <TableHead className="text-xs w-8">✓</TableHead>
+              <TableHead className="text-xs">Check</TableHead>
+              <TableHead className="text-xs">Current Value</TableHead>
+              <TableHead className="text-xs text-muted-foreground">Why it matters</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {checks.map((c) => (
+              <TableRow key={c.label} className={c.passed === false ? 'bg-destructive/5' : c.passed === true ? 'bg-success/5' : ''}>
+                <TableCell className="text-lg">
+                  {c.passed === true ? '✅' : c.passed === false ? '❌' : '❓'}
+                </TableCell>
+                <TableCell className="text-xs font-medium">{c.label}</TableCell>
+                <TableCell className="text-xs font-mono text-muted-foreground max-w-sm">{c.value}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{c.detail}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+
+      <div className="rounded-lg border border-border bg-muted/20 p-4 text-xs text-muted-foreground space-y-1">
+        <p className="font-medium text-foreground">Checks that require a new scrape run to verify:</p>
+        <ul className="list-disc list-inside space-y-0.5 ml-1">
+          <li>AbortController signal threading (skip/cancel abort in-flight fetches immediately)</li>
+          <li>products_json pagination page counter correctness (no skipped pages)</li>
+          <li>Strategy C sitemap caching (fetched once per run, not per collection)</li>
+          <li>WooCommerce wc_api strategy actually used in new runs</li>
+          <li>pages_visited increment per page in new runs (check Part 3 after re-scraping)</li>
+        </ul>
+        <p className="mt-2">These cannot be verified from DB state alone — trigger a scrape and check the Diagnostics event log for <code>page_fetched</code>, <code>pagination_complete</code>, and <code>strategy_fallback</code> events.</p>
+      </div>
+    </div>
   );
 }
