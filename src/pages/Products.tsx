@@ -4,7 +4,6 @@ import { useStores } from '@/hooks/useStores';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Search, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatPriceRange } from '@/lib/url';
@@ -25,6 +24,8 @@ export default function Products() {
 
   const update = (patch: Partial<ProductFilter>) => setFilter(f => ({ ...f, ...patch, page: 1 }));
 
+  const columns = ['Store', 'Title', 'Type', 'Vendor', 'Price', 'Variants', 'Last Changed', 'Actions'];
+
   return (
     <div className="p-6 space-y-4 max-w-full">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -38,8 +39,12 @@ export default function Products() {
       <div className="flex flex-wrap gap-2">
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-          <Input placeholder="Search title, vendor, tags…" className="pl-8 h-8 text-sm w-60"
-            value={filter.search || ''} onChange={e => update({ search: e.target.value || undefined })} />
+          <Input
+            placeholder="Search title, vendor, tags…"
+            className="pl-8 h-8 text-sm w-60"
+            value={filter.search || ''}
+            onChange={e => update({ search: e.target.value || undefined })}
+          />
         </div>
         <Select value={filter.storeId || 'all'} onValueChange={v => update({ storeId: v === 'all' ? undefined : v })}>
           <SelectTrigger className="h-8 text-sm w-44"><SelectValue placeholder="All stores" /></SelectTrigger>
@@ -62,10 +67,19 @@ export default function Products() {
             {filters?.vendors.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
           </SelectContent>
         </Select>
-        <Button variant={filter.changedSinceExport ? 'default' : 'outline'} size="sm" className="h-8 text-xs"
-          onClick={() => update({ changedSinceExport: !filter.changedSinceExport })}>
+        <Button
+          variant={filter.changedSinceExport ? 'default' : 'outline'}
+          size="sm"
+          className="h-8 text-xs"
+          onClick={() => update({ changedSinceExport: !filter.changedSinceExport })}
+        >
           Changed since export
         </Button>
+        {(filter.search || filter.storeId || filter.productType || filter.vendor || filter.changedSinceExport) && (
+          <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setFilter(DEFAULT_FILTER)}>
+            Clear filters
+          </Button>
+        )}
       </div>
 
       {/* Table */}
@@ -74,7 +88,7 @@ export default function Products() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {['Store', 'Title', 'Type', 'Vendor', 'Price', 'Variants', 'Last Changed', 'Actions'].map(h => (
+                {columns.map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-muted-foreground px-3 py-2.5 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -82,59 +96,26 @@ export default function Products() {
             <tbody>
               {isLoading && Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="border-b border-border/50">
-                  {Array.from({ length: 8 }).map((_, j) => (
+                  {columns.map((_, j) => (
                     <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-20" /></td>
                   ))}
                 </tr>
               ))}
               {!isLoading && products.length === 0 && (
                 <tr>
-                  <td colSpan={8} className="text-center text-muted-foreground py-12 text-sm">
+                  <td colSpan={columns.length} className="text-center text-muted-foreground py-12 text-sm">
                     No products found. Run a scrape to populate your library.
                   </td>
                 </tr>
               )}
-              {products.map((product: any) => (
-                <>
-                  <tr key={product.id}
-                    className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
-                    onClick={() => setExpanded(expanded === product.id ? null : product.id)}>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{product.store_name}</td>
-                    <td className="px-3 py-2.5 max-w-48">
-                      <div className="flex items-center gap-2">
-                        {product.images?.[0]?.src && (
-                          <img src={product.images[0].src} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0" />
-                        )}
-                        <span className="font-medium text-xs truncate">{product.title}</span>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{product.product_type || '—'}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">{product.vendor || '—'}</td>
-                    <td className="px-3 py-2.5 text-xs font-mono">{formatPriceRange(product.price_min, product.price_max)}</td>
-                    <td className="px-3 py-2.5 text-xs text-center">{product.product_variants?.length ?? 0}</td>
-                    <td className="px-3 py-2.5 text-xs text-muted-foreground">
-                      {product.last_changed_at ? new Date(product.last_changed_at).toLocaleDateString() : '—'}
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <div className="flex items-center gap-1">
-                        {product.url && (
-                          <a href={product.url} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}
-                            className="text-muted-foreground hover:text-primary transition-colors">
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        )}
-                        {expanded === product.id ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
-                      </div>
-                    </td>
-                  </tr>
-                  {expanded === product.id && (
-                    <tr key={`${product.id}-expanded`} className="border-b border-border/50 bg-muted/10">
-                      <td colSpan={8} className="px-4 py-4">
-                        <ProductRowExpanded product={product} />
-                      </td>
-                    </tr>
-                  )}
-                </>
+              {!isLoading && products.map((product: any) => (
+                <ProductRow
+                  key={product.id}
+                  product={product}
+                  isExpanded={expanded === product.id}
+                  onToggle={() => setExpanded(expanded === product.id ? null : product.id)}
+                  colCount={columns.length}
+                />
               ))}
             </tbody>
           </table>
@@ -159,5 +140,60 @@ export default function Products() {
         </div>
       )}
     </div>
+  );
+}
+
+function ProductRow({ product, isExpanded, onToggle, colCount }: {
+  product: any; isExpanded: boolean; onToggle: () => void; colCount: number;
+}) {
+  return (
+    <>
+      <tr
+        className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
+        onClick={onToggle}
+      >
+        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{product.store_name}</td>
+        <td className="px-3 py-2.5 max-w-48">
+          <div className="flex items-center gap-2">
+            {product.images?.[0]?.src && (
+              <img src={product.images[0].src} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0 border border-border" />
+            )}
+            <span className="font-medium text-xs truncate">{product.title}</span>
+          </div>
+        </td>
+        <td className="px-3 py-2.5 text-xs text-muted-foreground">{product.product_type || '—'}</td>
+        <td className="px-3 py-2.5 text-xs text-muted-foreground">{product.vendor || '—'}</td>
+        <td className="px-3 py-2.5 text-xs font-mono">{formatPriceRange(product.price_min, product.price_max)}</td>
+        <td className="px-3 py-2.5 text-xs text-center">{product.product_variants?.length ?? 0}</td>
+        <td className="px-3 py-2.5 text-xs text-muted-foreground">
+          {product.last_changed_at ? new Date(product.last_changed_at).toLocaleDateString() : '—'}
+        </td>
+        <td className="px-3 py-2.5">
+          <div className="flex items-center gap-1.5">
+            {product.url && (
+              <a
+                href={product.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={e => e.stopPropagation()}
+                className="text-muted-foreground hover:text-primary transition-colors"
+              >
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            )}
+            {isExpanded
+              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
+              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+          </div>
+        </td>
+      </tr>
+      {isExpanded && (
+        <tr className="border-b border-border/50 bg-muted/10">
+          <td colSpan={colCount} className="px-4 py-4">
+            <ProductRowExpanded product={product} />
+          </td>
+        </tr>
+      )}
+    </>
   );
 }
