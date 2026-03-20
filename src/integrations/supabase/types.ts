@@ -795,6 +795,76 @@ export type Database = {
         }
         Relationships: []
       }
+      scraper_events: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          product_id: string | null
+          raw_error: string | null
+          reason_code: string | null
+          run_id: string | null
+          severity: string
+          source_platform: string | null
+          stage: string
+          store_id: string | null
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message?: string
+          product_id?: string | null
+          raw_error?: string | null
+          reason_code?: string | null
+          run_id?: string | null
+          severity?: string
+          source_platform?: string | null
+          stage: string
+          store_id?: string | null
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          product_id?: string | null
+          raw_error?: string | null
+          reason_code?: string | null
+          run_id?: string | null
+          severity?: string
+          source_platform?: string | null
+          stage?: string
+          store_id?: string | null
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scraper_events_product_id_fkey"
+            columns: ["product_id"]
+            isOneToOne: false
+            referencedRelation: "products"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scraper_events_run_id_fkey"
+            columns: ["run_id"]
+            isOneToOne: false
+            referencedRelation: "scrape_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scraper_events_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scraper_settings: {
         Row: {
           enrichment_batch_size: number
