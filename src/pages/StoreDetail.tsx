@@ -1,17 +1,20 @@
 import { useParams } from 'react-router-dom';
-import { useStores } from '@/hooks/useStores';
+import { useStores, useUpdateStore } from '@/hooks/useStores';
 import { useStoreMetricsHistory } from '@/hooks/usePriceHistory';
 import { useProducts } from '@/hooks/useProducts';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Package, TrendingDown, Clock, ExternalLink, Loader2 } from 'lucide-react';
+import { Package, TrendingDown, Clock, ExternalLink, Loader2, Power } from 'lucide-react';
 import { formatPrice } from '@/lib/url';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 
 export default function StoreDetail() {
   const { id } = useParams<{ id: string }>();
   const { data: stores } = useStores();
+  const updateStore = useUpdateStore();
   const store = stores?.find(s => s.id === id);
   const { data: metrics } = useStoreMetricsHistory(id ?? null);
-  const { data: productsData } = useProducts({ page: 1, pageSize: 5, storeId: id, sortBy: 'scraped_at', sortDir: 'desc' });
+  const { data: _productsData } = useProducts({ page: 1, pageSize: 5, storeId: id, sortBy: 'scraped_at', sortDir: 'desc' });
 
   if (!store) return (
     <div className="flex items-center justify-center h-64">
@@ -27,20 +30,42 @@ export default function StoreDetail() {
   })) ?? [];
 
   return (
-    <div className="p-6 space-y-6 max-w-4xl">
+    <div className="p-6 space-y-6 max-w-4xl overflow-y-auto h-full">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold">{store.name}</h1>
+          <h1 className="text-2xl font-bold text-foreground">{store.name}</h1>
           <a href={store.url} target="_blank" rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 mt-1">
             {store.normalized_url} <ExternalLink className="w-3 h-3" />
           </a>
         </div>
-        <div className={`px-2 py-1 rounded text-xs font-medium ${store.enabled ? 'bg-primary/15 text-primary' : 'bg-muted text-muted-foreground'}`}>
-          {store.enabled ? 'Enabled' : 'Disabled'}
+
+        {/* Enable / Disable toggle — prominently placed */}
+        <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-colors ${
+          store.enabled
+            ? 'border-primary/40 bg-primary/5'
+            : 'border-border bg-muted/40'
+        }`}>
+          <Power className={`w-4 h-4 ${store.enabled ? 'text-primary' : 'text-muted-foreground'}`} />
+          <Label
+            htmlFor={`store-toggle-${store.id}`}
+            className={`text-sm font-semibold cursor-pointer select-none ${store.enabled ? 'text-primary' : 'text-muted-foreground'}`}
+          >
+            {store.enabled ? 'Enabled' : 'Disabled'}
+          </Label>
+          <Switch
+            id={`store-toggle-${store.id}`}
+            checked={store.enabled}
+            onCheckedChange={(checked) =>
+              updateStore.mutate({ id: store.id, enabled: checked })
+            }
+            disabled={updateStore.isPending}
+          />
         </div>
       </div>
 
+      {/* KPI cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1"><Package className="w-3.5 h-3.5" /><span className="text-xs">Products</span></div>
@@ -56,6 +81,7 @@ export default function StoreDetail() {
         </div>
       </div>
 
+      {/* Charts */}
       {chartData.length > 1 && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div className="rounded-lg border border-border bg-card p-4">
@@ -91,3 +117,4 @@ export default function StoreDetail() {
     </div>
   );
 }
+
