@@ -564,26 +564,49 @@ function Part2({ storeRows, catRows }: { storeRows: StoreAuditRow[]; catRows: Ca
 }
 
 // ─── Part 3: Pagination Audit ─────────────────────────────────────────────────
-function Part3({ storeRows }: { storeRows: StoreAuditRow[] }) {
+function Part3({ storeRows, hasPageTracking, totalPagesTracked, pagesVisitedRuns }: {
+  storeRows: StoreAuditRow[];
+  hasPageTracking: boolean;
+  totalPagesTracked: number;
+  pagesVisitedRuns: any[];
+}) {
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-foreground">Pagination depth is not tracked</p>
-            <p className="text-xs text-warning mt-1">
-              The current scraper does not persist per-page visit counts, per-category page depth, or 
-              cursor state per run. The <code className="font-mono text-xs">scrape_runs</code> table has no 
-              page_count column and <code className="font-mono text-xs">scraper_events</code> records 
-              no per-page stage events. Pagination can only be inferred from product counts vs expected site size.
-            </p>
+      {hasPageTracking ? (
+        <div className="rounded-lg border border-success/30 bg-success/5 p-4">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Pagination tracking is active ✅</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                <strong>{totalPagesTracked.toLocaleString()} pages</strong> tracked across {pagesVisitedRuns.filter((r: any) => (r.pages_visited ?? 0) > 0).length} recent runs.
+                The <code className="font-mono text-xs bg-muted px-1">pages_visited</code> column on <code className="font-mono text-xs bg-muted px-1">scrape_runs</code> is now
+                populated. Per-page <code className="font-mono text-xs bg-muted px-1">page_fetched</code> events are emitted to <code className="font-mono text-xs bg-muted px-1">scraper_events</code>.
+                Note: historical scrapes before {new Date().toLocaleDateString('en-AU')} show "Not tracked".
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
+          <div className="flex items-start gap-2">
+            <Info className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Pagination tracking added — awaiting first tracked scrape</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                The <code className="font-mono text-xs bg-muted px-1">pages_visited</code> column has been added to <code className="font-mono text-xs bg-muted px-1">scrape_runs</code>,
+                and the scraper now emits <code className="font-mono text-xs bg-muted px-1">page_fetched</code> events per page and
+                a <code className="font-mono text-xs bg-muted px-1">pagination_complete</code> event when done.
+                Tracking will begin automatically from the next scrape run.
+                <strong className="block mt-1">Historical scrapes show "Not tracked" — this is expected.</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold">What we can infer from product counts</h3>
+        <h3 className="text-sm font-semibold">Per-store pagination status</h3>
         <div className="rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
@@ -592,7 +615,7 @@ function Part3({ storeRows }: { storeRows: StoreAuditRow[] }) {
                 <TableHead className="text-xs">Strategy</TableHead>
                 <TableHead className="text-xs text-right">Products in DB</TableHead>
                 <TableHead className="text-xs">Pagination method</TableHead>
-                <TableHead className="text-xs">Inferred status</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -600,29 +623,30 @@ function Part3({ storeRows }: { storeRows: StoreAuditRow[] }) {
                 let method = 'N/A';
                 let inferred = '';
                 if (s.scrape_strategy === 'products_json') {
-                  method = '/products.json?page=N (limit 250)';
+                  method = '/collections.json → per-collection products.json (new) | fallback: flat products.json';
                   inferred = s.db_products === 0
                     ? '❌ No products — either fetch failed or site returned empty'
                     : s.db_products > 200
                     ? '✅ Multiple pages likely fetched (>200 products)'
                     : s.db_products === 250 || s.db_products === 500
                     ? '⚠️ Round number — possible page limit hit'
-                    : '⚠️ Unknown — no page count recorded';
+                    : hasPageTracking ? '⚠️ Unknown — re-scrape to get page count' : '⚠️ Historical — page count not tracked';
                 } else if (s.scrape_strategy === 'sitemap_handles') {
                   method = 'sitemap.xml → individual product URLs';
-                  inferred = s.db_products === 0 ? '❌ No products fetched from sitemap' : '⚠️ Sitemap pagination not tracked';
+                  inferred = s.db_products === 0 ? '❌ No products fetched from sitemap' : hasPageTracking ? '⚠️ Per-product fetches tracked in pages_visited' : '⚠️ Historical — not tracked';
                 }
                 return (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs font-medium">{s.name}</TableCell>
                     <TableCell><span className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{s.scrape_strategy}</span></TableCell>
                     <TableCell className="text-right text-xs tabular-nums font-semibold">{s.db_products}</TableCell>
-                    <TableCell className="text-xs">{method}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{method}</TableCell>
                     <TableCell className="text-xs">{inferred || <NotTracked />}</TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
+
           </Table>
         </div>
         <p className="text-xs text-muted-foreground">
