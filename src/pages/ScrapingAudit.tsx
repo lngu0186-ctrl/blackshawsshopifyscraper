@@ -852,34 +852,41 @@ function Part5({ storeRows, nullEventStats }: { storeRows: StoreAuditRow[]; null
 }
 
 // ─── Part 6: Platform Methods ─────────────────────────────────────────────────
-function Part6({ storeRows }: { storeRows: StoreAuditRow[] }) {
+function Part6({ storeRows, onDetectPlatforms, detectingPlatforms }: { storeRows: StoreAuditRow[]; onDetectPlatforms: () => void; detectingPlatforms: boolean }) {
   const totalStores = storeRows.length;
   const unknownPlatform = storeRows.filter(s => !s.platform || s.platform === 'unknown').length;
   const shopifyStores = storeRows.filter(s => s.platform === 'shopify');
-  const wooStores = storeRows.filter(s => s.platform === 'woocommerce');
   const productsJsonStores = storeRows.filter(s => s.scrape_strategy === 'products_json');
   const sitemapStores = storeRows.filter(s => s.scrape_strategy === 'sitemap_handles');
+  const allDetected = unknownPlatform === 0;
 
   return (
     <div className="space-y-6">
       {/* Platform detection status */}
-      <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
-        <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4" /> Platform detection has not been persisted for any store
-        </p>
-        <p className="text-xs text-warning">
-          All {totalStores} stores have <code className="font-mono text-xs bg-white/60 px-1 rounded">platform = "unknown"</code>.
-          The validate-store edge function runs platform detection, but results are not being saved to the 
-          <code className="font-mono text-xs bg-white/60 px-1 rounded mx-1">platform</code> column of existing stores.
-          Only newly qualified stores (via Add Store) get a platform value.
-        </p>
+      <div className={cn('rounded-lg border p-4', allDetected ? 'border-success/30 bg-success/5' : 'border-warning/30 bg-warning/5')}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+              {allDetected ? <CheckCircle2 className="w-4 h-4 text-success" /> : <AlertTriangle className="w-4 h-4 text-warning" />}
+              {allDetected ? 'Platform detection complete' : `${unknownPlatform} of ${totalStores} stores have platform = "unknown"`}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {allDetected
+                ? `All ${totalStores} stores have platform detected. Shopify: ${shopifyStores.length}.`
+                : 'Run platform detection to probe each store\'s endpoints and persist the result to stores.platform.'}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={onDetectPlatforms} disabled={detectingPlatforms} className="shrink-0 text-xs">
+            {detectingPlatforms ? <><RefreshCw className="w-3 h-3 mr-1.5 animate-spin" /> Detecting…</> : <><Play className="w-3 h-3 mr-1.5" /> Run Detection</>}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
         {/* Shopify scraping method */}
         <div className="rounded-lg border border-border p-4 bg-card">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-muted-foreground" /> Shopify stores
+            <Cpu className="w-4 h-4 text-muted-foreground" /> Shopify stores ({shopifyStores.length || '?'} detected)
           </h3>
           <div className="space-y-2 text-xs">
             <div className="flex items-start gap-2">
