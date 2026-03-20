@@ -163,7 +163,7 @@ export function useRevertProductField() {
       await supabase
         .from('scraped_products')
         .update({
-          override_fields: overrides,
+          override_fields: overrides as any,
           is_manually_edited: hasOverrides,
         })
         .eq('id', productId);
