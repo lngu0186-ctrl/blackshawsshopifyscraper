@@ -12,6 +12,7 @@ import Export from "./pages/Export";
 import Diagnostics from "./pages/Diagnostics";
 import SettingsPage from "./pages/Settings";
 import StoreDetail from "./pages/StoreDetail";
+import ScrapingAudit from "./pages/ScrapingAudit";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
@@ -46,6 +47,7 @@ function AppLayout() {
           <Route path="/price-changes" element={<PriceChanges />} />
           <Route path="/export" element={<Export />} />
           <Route path="/diagnostics" element={<Diagnostics />} />
+          <Route path="/scraping-audit" element={<ScrapingAudit />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/stores/:id" element={<StoreDetail />} />
           <Route path="*" element={<NotFound />} />
