@@ -111,9 +111,9 @@ function StatusPill({ status }: { status: string }) {
 
 // ─── Pipeline Stage Row ───────────────────────────────────────────────────────
 function PipelineRow({
-  icon: Icon, label, done, total, success, warning, error, active,
+  icon: Icon, label, done, total, success, warning, error, active, untracked,
 }: {
-  icon: any; label: string; done: number; total: number; success: number; warning: number; error: number; active?: boolean;
+  icon: any; label: string; done: number; total: number; success: number; warning: number; error: number; active?: boolean; untracked?: boolean;
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
@@ -124,9 +124,13 @@ function PipelineRow({
       <div className="flex-1 min-w-0">
         <div className="flex items-center justify-between mb-1">
           <span className={`text-[12px] font-medium ${active ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
-          <span className="text-[11px] font-bold tabular-nums text-foreground">{done.toLocaleString()} <span className="text-muted-foreground font-normal">/ {total.toLocaleString()}</span></span>
+          {untracked ? (
+            <span className="text-[10px] text-muted-foreground italic">Not tracked</span>
+          ) : (
+            <span className="text-[11px] font-bold tabular-nums text-foreground">{done.toLocaleString()} <span className="text-muted-foreground font-normal">/ {total.toLocaleString()}</span></span>
+          )}
         </div>
-        <Progress value={pct} className="h-1.5" />
+        {!untracked && <Progress value={pct} className="h-1.5" />}
       </div>
       <div className="flex items-center gap-2 text-[10px] flex-shrink-0">
         {success > 0 && <span className="text-success font-semibold">+{success}</span>}
