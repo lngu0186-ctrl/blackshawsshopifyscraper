@@ -45,6 +45,7 @@ function AppLayout() {
           <Route path="/products" element={<Products />} />
           <Route path="/price-changes" element={<PriceChanges />} />
           <Route path="/export" element={<Export />} />
+          <Route path="/diagnostics" element={<Diagnostics />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/stores/:id" element={<StoreDetail />} />
           <Route path="*" element={<NotFound />} />
