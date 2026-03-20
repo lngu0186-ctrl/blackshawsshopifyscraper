@@ -483,7 +483,7 @@ function ProductRow({
       case 'Type': return <span className="text-xs text-muted-foreground">{product.category || product.product_type || '—'}</span>;
       case 'Price': return (
         <div className="flex items-center gap-1">
-          {product.auth_blocked && <Lock className="w-3 h-3 text-warning flex-shrink-0" title="Auth blocked" />}
+          {product.auth_blocked && <span title="Auth blocked"><Lock className="w-3 h-3 text-warning flex-shrink-0" /></span>}
           <span className="text-xs font-mono">
             {product.price != null ? `$${Number(product.price).toFixed(2)}` : formatPriceRange(product.price_min, product.price_max)}
           </span>
