@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useStores } from '@/hooks/useStores';
 import { useScrapeRun } from '@/hooks/useScrapeRun';
-import { useDataQualityStats, useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
+import { useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
+import { usePipelineStats } from '@/hooks/usePipelineStats';
 import { SITE_ADAPTERS } from '@/lib/siteAdapters';
 import { Link } from 'react-router-dom';
 import {
