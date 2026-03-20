@@ -1,62 +1,161 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useCallback } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useProducts, useProductFilters } from '@/hooks/useProducts';
 import { useStores } from '@/hooks/useStores';
 import { useExport } from '@/hooks/useExport';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Search, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp, Download, X, Loader2 } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Progress } from '@/components/ui/progress';
+import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuTrigger, DropdownMenuCheckboxItem,
+  DropdownMenuItem, DropdownMenuSeparator, DropdownMenuLabel,
+} from '@/components/ui/dropdown-menu';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Search, ChevronLeft, ChevronRight, ExternalLink, Download,
+  X, Loader2, SlidersHorizontal, Columns, ChevronDown, ChevronUp,
+  ArrowUpDown, ArrowUp, ArrowDown, Lock, Check, AlertTriangle,
+} from 'lucide-react';
 import { formatPriceRange } from '@/lib/url';
 import type { ProductFilter } from '@/types/schemas';
-import { ProductRowExpanded } from '@/components/ProductRowExpanded';
+import { ProductDetailDrawer } from '@/components/ProductDetailDrawer';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
+import { exportShopifyReadyCsv, exportReviewRequiredCsv, serializeCsv, SHOPIFY_CSV_HEADERS, buildShopifyRowFromScrapedProduct } from '@/lib/csvExport';
 
 const DEFAULT_FILTER: ProductFilter = { page: 1, pageSize: 50, sortBy: 'scraped_at', sortDir: 'desc' };
 
+const ALL_COLUMNS = ['Store', 'Title', 'Vendor', 'Type', 'Price', 'Variants', 'Barcode', 'Confidence', 'Status', 'Last Changed', 'Actions'] as const;
+const DEFAULT_VISIBLE = new Set(['Store', 'Title', 'Vendor', 'Price', 'Variants', 'Barcode', 'Confidence', 'Status', 'Last Changed', 'Actions']);
+
+type ColName = typeof ALL_COLUMNS[number];
+
+const SORTABLE: Partial<Record<ColName, string>> = {
+  Store: 'store_name',
+  Title: 'title',
+  Vendor: 'vendor',
+  Type: 'product_type',
+  Price: 'price_min',
+  Variants: 'product_variants',
+  'Last Changed': 'last_changed_at',
+};
+
 export default function Products() {
-  const [filter, setFilter] = useState<ProductFilter>(DEFAULT_FILTER);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+
+  const initialFilter: ProductFilter = {
+    ...DEFAULT_FILTER,
+    ...(searchParams.get('auth_blocked') === '1' ? { authBlocked: true } : {}),
+    ...(searchParams.get('review_status') ? { reviewStatus: searchParams.get('review_status')! } : {}),
+  };
+
+  const [filter, setFilter] = useState<ProductFilter>(initialFilter);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(new Set(DEFAULT_VISIBLE));
+  const [drawerProduct, setDrawerProduct] = useState<any | null>(null);
+  const [exportConfirm, setExportConfirm] = useState<{ mode: string; count: number } | null>(null);
+
   const { data, isLoading } = useProducts(filter);
-  const { data: filters } = useProductFilters();
+  const { data: filterOptions } = useProductFilters();
   const { data: stores } = useStores();
   const { exportShopifyCsv } = useExport();
+
   const products = data?.products ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / filter.pageSize);
 
   const update = (patch: Partial<ProductFilter>) => setFilter(f => ({ ...f, ...patch, page: 1 }));
 
+  // Toggle sort
+  const toggleSort = (col: ColName) => {
+    const col_key = SORTABLE[col];
+    if (!col_key) return;
+    setFilter(f => ({
+      ...f,
+      sortBy: col_key,
+      sortDir: f.sortBy === col_key ? (f.sortDir === 'asc' ? 'desc' : 'asc') : 'desc',
+      page: 1,
+    }));
+  };
+
+  const getSortIcon = (col: ColName) => {
+    const col_key = SORTABLE[col];
+    if (!col_key) return <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-50" />;
+    if (filter.sortBy !== col_key) return <ArrowUpDown className="w-3 h-3 opacity-0 group-hover:opacity-50" />;
+    return filter.sortDir === 'asc'
+      ? <ArrowUp className="w-3 h-3 text-primary" />
+      : <ArrowDown className="w-3 h-3 text-primary" />;
+  };
+
+  // Selection
   const pageIds = useMemo(() => products.map((p: any) => p.id), [products]);
   const allPageSelected = pageIds.length > 0 && pageIds.every((id: string) => selectedIds.has(id));
   const somePageSelected = pageIds.some((id: string) => selectedIds.has(id));
+  const toggleAll = () => setSelectedIds(prev => {
+    const next = new Set(prev);
+    if (allPageSelected) pageIds.forEach((id: string) => next.delete(id));
+    else pageIds.forEach((id: string) => next.add(id));
+    return next;
+  });
+  const toggleOne = (id: string) => setSelectedIds(prev => {
+    const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next;
+  });
 
-  const toggleAll = () => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (allPageSelected) {
-        pageIds.forEach((id: string) => next.delete(id));
-      } else {
-        pageIds.forEach((id: string) => next.add(id));
-      }
-      return next;
-    });
+  // Active filter chips
+  const activeFilters: Array<{ key: string; label: string }> = [
+    filter.storeId && { key: 'storeId', label: `Store: ${stores?.find(s => s.id === filter.storeId)?.name ?? filter.storeId}` },
+    filter.productType && { key: 'productType', label: `Type: ${filter.productType}` },
+    filter.vendor && { key: 'vendor', label: `Vendor: ${filter.vendor}` },
+    (filter as any).reviewStatus && { key: 'reviewStatus', label: `Review: ${(filter as any).reviewStatus}` },
+    (filter as any).missingField && { key: 'missingField', label: `Missing: ${(filter as any).missingField}` },
+    (filter as any).authBlocked && { key: 'authBlocked', label: 'Auth Blocked' },
+    filter.changedSinceExport && { key: 'changedSinceExport', label: 'Changed since export' },
+  ].filter(Boolean) as Array<{ key: string; label: string }>;
+
+  const removeFilter = (key: string) => update({ [key]: undefined } as any);
+  const clearFilters = () => setFilter(DEFAULT_FILTER);
+
+  // Bulk actions
+  const bulkUpdateStatus = useMutation({
+    mutationFn: async ({ ids, status }: { ids: string[]; status: string }) => {
+      await supabase.from('scraped_products')
+        .update({ review_status: status, is_approved: status === 'approved' })
+        .in('id', ids)
+        .eq('user_id', user!.id);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['products'] }); toast.success('Updated'); },
+  });
+
+  // Export all filtered rows (paginated)
+  const exportAllFiltered = async (mode: 'shopify_csv' | 'review_csv') => {
+    if (!user) return;
+    let allProducts: any[] = [];
+    let page = 1;
+    while (true) {
+      const { products: batch } = await fetchProductPage({ ...filter, page, pageSize: 500 }, user.id);
+      allProducts = [...allProducts, ...batch];
+      if (batch.length < 500) break;
+      page++;
+    }
+    if (mode === 'shopify_csv') exportShopifyReadyCsv(allProducts);
+    else exportReviewRequiredCsv(allProducts);
   };
 
-  const toggleOne = (id: string) => {
-    setSelectedIds(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const columns = ['', 'Store', 'Title', 'Type', 'Vendor', 'Price', 'Variants', 'Last Changed', 'Actions'];
+  const visibleColsArr = ALL_COLUMNS.filter(c => visibleCols.has(c));
+  const colCount = visibleColsArr.length + 1; // +1 for checkbox
 
   return (
     <div className="p-6 space-y-4 max-w-full">
+      {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">All Products</h1>
@@ -64,52 +163,192 @@ export default function Products() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex flex-wrap gap-2">
+      {/* Toolbar */}
+      <div className="flex flex-wrap gap-2 items-center">
+        {/* Search */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input
             placeholder="Search title, vendor, tags…"
-            className="pl-8 h-8 text-sm w-60"
+            className="pl-8 h-8 text-sm w-56"
             value={filter.search || ''}
             onChange={e => update({ search: e.target.value || undefined })}
           />
         </div>
-        <Select value={filter.storeId || 'all'} onValueChange={v => update({ storeId: v === 'all' ? undefined : v })}>
-          <SelectTrigger className="h-8 text-sm w-44"><SelectValue placeholder="All stores" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All stores</SelectItem>
-            {stores?.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filter.productType || 'all'} onValueChange={v => update({ productType: v === 'all' ? undefined : v })}>
-          <SelectTrigger className="h-8 text-sm w-40"><SelectValue placeholder="All types" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All types</SelectItem>
-            {filters?.types.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Select value={filter.vendor || 'all'} onValueChange={v => update({ vendor: v === 'all' ? undefined : v })}>
-          <SelectTrigger className="h-8 text-sm w-40"><SelectValue placeholder="All vendors" /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All vendors</SelectItem>
-            {filters?.vendors.map(v => <SelectItem key={v} value={v}>{v}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button
-          variant={filter.changedSinceExport ? 'default' : 'outline'}
-          size="sm"
-          className="h-8 text-xs"
-          onClick={() => update({ changedSinceExport: !filter.changedSinceExport })}
-        >
-          Changed since export
-        </Button>
-        {(filter.search || filter.storeId || filter.productType || filter.vendor || filter.changedSinceExport) && (
-          <Button variant="ghost" size="sm" className="h-8 text-xs text-muted-foreground" onClick={() => setFilter(DEFAULT_FILTER)}>
-            Clear filters
-          </Button>
+
+        {/* Filters dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              Filters
+              {activeFilters.length > 0 && (
+                <span className="bg-primary text-primary-foreground text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
+                  {activeFilters.length}
+                </span>
+              )}
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent className="w-60" align="start">
+            <DropdownMenuLabel className="text-xs">Source</DropdownMenuLabel>
+            {stores?.map(s => (
+              <DropdownMenuCheckboxItem
+                key={s.id}
+                checked={filter.storeId === s.id}
+                onCheckedChange={v => update({ storeId: v ? s.id : undefined })}
+                className="text-xs"
+              >
+                {s.name}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs">Review Status</DropdownMenuLabel>
+            {['pending', 'approved', 'needs_review', 'rejected'].map(s => (
+              <DropdownMenuCheckboxItem
+                key={s}
+                checked={(filter as any).reviewStatus === s}
+                onCheckedChange={v => update({ reviewStatus: v ? s : undefined } as any)}
+                className="text-xs capitalize"
+              >
+                {s.replace('_', ' ')}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs">Missing Field</DropdownMenuLabel>
+            {['price', 'image_url', 'description_html', 'barcode'].map(f => (
+              <DropdownMenuCheckboxItem
+                key={f}
+                checked={(filter as any).missingField === f}
+                onCheckedChange={v => update({ missingField: v ? f : undefined } as any)}
+                className="text-xs"
+              >
+                {f}
+              </DropdownMenuCheckboxItem>
+            ))}
+            <DropdownMenuSeparator />
+            <DropdownMenuCheckboxItem
+              checked={!!(filter as any).authBlocked}
+              onCheckedChange={v => update({ authBlocked: v || undefined } as any)}
+              className="text-xs"
+            >
+              🔐 Auth Blocked only
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuCheckboxItem
+              checked={!!filter.changedSinceExport}
+              onCheckedChange={v => update({ changedSinceExport: v || undefined })}
+              className="text-xs"
+            >
+              Changed since export
+            </DropdownMenuCheckboxItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Columns dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+              <Columns className="w-3.5 h-3.5" />
+              Columns
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="start">
+            {ALL_COLUMNS.map(col => (
+              <DropdownMenuCheckboxItem
+                key={col}
+                checked={visibleCols.has(col)}
+                onCheckedChange={v => {
+                  setVisibleCols(prev => {
+                    const next = new Set(prev);
+                    v ? next.add(col) : next.delete(col);
+                    return next;
+                  });
+                }}
+                className="text-xs"
+              >
+                {col}
+              </DropdownMenuCheckboxItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+
+        {/* Selected count */}
+        {selectedIds.size > 0 && (
+          <span className="text-xs text-muted-foreground">{selectedIds.size} selected</span>
         )}
+
+        {/* Bulk actions */}
+        {selectedIds.size > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
+                Bulk Actions <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem className="text-xs" onClick={() => bulkUpdateStatus.mutate({ ids: Array.from(selectedIds), status: 'approved' })}>
+                <Check className="w-3 h-3 mr-1.5" /> Mark as Approved
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-xs" onClick={() => bulkUpdateStatus.mutate({ ids: Array.from(selectedIds), status: 'needs_review' })}>
+                <AlertTriangle className="w-3 h-3 mr-1.5" /> Mark as Needs Review
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-xs" onClick={() => exportShopifyCsv.mutate({ productIds: Array.from(selectedIds) })}>
+                <Download className="w-3 h-3 mr-1.5" /> Export selected (Shopify CSV)
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
+        {/* Export dropdown */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="sm" className="h-8 text-xs gap-1.5 ml-auto">
+              <Download className="w-3.5 h-3.5" />
+              Export <ChevronDown className="w-3 h-3" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel className="text-xs">Shopify CSV</DropdownMenuLabel>
+            <DropdownMenuItem className="text-xs" onClick={() => exportShopifyCsv.mutate({ productIds: products.map((p: any) => p.id) })}>
+              Export visible rows ({products.length}) → Shopify CSV
+            </DropdownMenuItem>
+            <DropdownMenuItem className="text-xs" onClick={() => exportAllFiltered('shopify_csv')}>
+              Export all filtered ({total.toLocaleString()}) → Shopify CSV
+            </DropdownMenuItem>
+            {selectedIds.size > 0 && (
+              <DropdownMenuItem className="text-xs" onClick={() => exportShopifyCsv.mutate({ productIds: Array.from(selectedIds) })}>
+                Export selected ({selectedIds.size}) → Shopify CSV
+              </DropdownMenuItem>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="text-xs">Other Formats</DropdownMenuLabel>
+            <DropdownMenuItem className="text-xs" onClick={() => exportAllFiltered('review_csv')}>
+              Export Review Required → CSV with missing fields
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
+
+      {/* Active filter chips */}
+      {activeFilters.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 items-center">
+          <span className="text-xs text-muted-foreground">Active:</span>
+          {activeFilters.map(f => (
+            <span
+              key={f.key}
+              className="flex items-center gap-1 text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full"
+            >
+              {f.label}
+              <button onClick={() => removeFilter(f.key)} className="hover:text-destructive transition-colors">
+                <X className="w-2.5 h-2.5" />
+              </button>
+            </span>
+          ))}
+          <button onClick={clearFilters} className="text-xs text-muted-foreground hover:text-foreground underline ml-1">
+            Clear all
+          </button>
+        </div>
+      )}
 
       {/* Table */}
       <div className="rounded-lg border border-border overflow-hidden">
@@ -122,26 +361,35 @@ export default function Products() {
                     checked={allPageSelected}
                     data-state={somePageSelected && !allPageSelected ? 'indeterminate' : undefined}
                     onCheckedChange={toggleAll}
-                    aria-label="Select all on page"
+                    aria-label="Select all"
                     className="block"
                   />
                 </th>
-                {columns.slice(1).map(h => (
-                  <th key={h} className="text-left text-xs font-semibold text-muted-foreground px-3 py-2.5 whitespace-nowrap">{h}</th>
+                {visibleColsArr.map(col => (
+                  <th
+                    key={col}
+                    className={`text-left text-xs font-semibold text-muted-foreground px-3 py-2.5 whitespace-nowrap group ${SORTABLE[col] ? 'cursor-pointer select-none hover:text-foreground transition-colors' : ''}`}
+                    onClick={() => SORTABLE[col] && toggleSort(col)}
+                  >
+                    <span className="flex items-center gap-1.5">
+                      {col}
+                      {SORTABLE[col] && getSortIcon(col)}
+                    </span>
+                  </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {isLoading && Array.from({ length: 8 }).map((_, i) => (
                 <tr key={i} className="border-b border-border/50">
-                  {columns.map((_, j) => (
+                  {Array.from({ length: colCount }).map((_, j) => (
                     <td key={j} className="px-3 py-2.5"><Skeleton className="h-4 w-20" /></td>
                   ))}
                 </tr>
               ))}
               {!isLoading && products.length === 0 && (
                 <tr>
-                  <td colSpan={columns.length} className="text-center text-muted-foreground py-12 text-sm">
+                  <td colSpan={colCount} className="text-center text-muted-foreground py-12 text-sm">
                     No products found. Run a scrape to populate your library.
                   </td>
                 </tr>
@@ -150,11 +398,10 @@ export default function Products() {
                 <ProductRow
                   key={product.id}
                   product={product}
-                  isExpanded={expanded === product.id}
                   isSelected={selectedIds.has(product.id)}
-                  onToggleExpand={() => setExpanded(expanded === product.id ? null : product.id)}
+                  visibleCols={visibleCols}
                   onToggleSelect={() => toggleOne(product.id)}
-                  colCount={columns.length}
+                  onOpenDrawer={() => setDrawerProduct(product)}
                 />
               ))}
             </tbody>
@@ -180,91 +427,139 @@ export default function Products() {
         </div>
       )}
 
-      {/* Bulk-select floating toolbar */}
-      {selectedIds.size > 0 && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-border bg-card shadow-xl px-5 py-3 animate-in slide-in-from-bottom-4 duration-200">
-          <span className="text-sm font-medium text-foreground">
-            {selectedIds.size} product{selectedIds.size !== 1 ? 's' : ''} selected
-          </span>
-          <Button
-            size="sm"
-            className="h-8 gap-1.5"
-            onClick={() => exportShopifyCsv.mutate({ productIds: Array.from(selectedIds) })}
-            disabled={exportShopifyCsv.isPending}
-          >
-            {exportShopifyCsv.isPending
-              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              : <Download className="w-3.5 h-3.5" />}
-            Export to Shopify CSV
-          </Button>
-          <button
-            onClick={() => setSelectedIds(new Set())}
-            className="text-muted-foreground hover:text-foreground transition-colors"
-            aria-label="Clear selection"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      )}
+      {/* Product detail drawer */}
+      <ProductDetailDrawer
+        product={drawerProduct}
+        open={!!drawerProduct}
+        onClose={() => setDrawerProduct(null)}
+      />
     </div>
   );
 }
 
-function ProductRow({ product, isExpanded, isSelected, onToggleExpand, onToggleSelect, colCount }: {
-  product: any; isExpanded: boolean; isSelected: boolean;
-  onToggleExpand: () => void; onToggleSelect: () => void; colCount: number;
+// ── Helpers ────────────────────────────────────────────────────────────────────
+async function fetchProductPage(filter: ProductFilter, userId: string) {
+  let query = supabase
+    .from('scraped_products')
+    .select('*', { count: 'exact' })
+    .eq('user_id', userId);
+  if ((filter as any).authBlocked) query = query.eq('auth_blocked', true);
+  const from = ((filter.page || 1) - 1) * (filter.pageSize || 500);
+  const to = from + (filter.pageSize || 500) - 1;
+  query = query.range(from, to);
+  const { data } = await query;
+  return { products: data ?? [] };
+}
+
+function confidenceTier(score: number): { label: string; cls: string } {
+  if (score >= 90) return { label: 'Ready', cls: 'bg-success/15 text-success' };
+  if (score >= 60) return { label: 'Review', cls: 'bg-warning/15 text-warning' };
+  return { label: 'Partial', cls: 'bg-destructive/15 text-destructive' };
+}
+
+// ── Product Row ────────────────────────────────────────────────────────────────
+function ProductRow({
+  product, isSelected, visibleCols, onToggleSelect, onOpenDrawer,
+}: {
+  product: any;
+  isSelected: boolean;
+  visibleCols: Set<string>;
+  onToggleSelect: () => void;
+  onOpenDrawer: () => void;
 }) {
-  return (
-    <>
-      <tr
-        className={`border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer ${isSelected ? 'bg-primary/5' : ''}`}
-        onClick={onToggleExpand}
-      >
-        <td className="px-3 py-2.5 w-8" onClick={e => { e.stopPropagation(); onToggleSelect(); }}>
-          <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} aria-label="Select product" className="block" />
-        </td>
-        <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{product.store_name}</td>
-        <td className="px-3 py-2.5 max-w-48">
-          <div className="flex items-center gap-2">
-            {product.images?.[0]?.src && (
-              <img src={product.images[0].src} alt="" className="w-8 h-8 rounded object-cover flex-shrink-0 border border-border" />
-            )}
-            <span className="font-medium text-xs truncate">{product.title}</span>
-          </div>
-        </td>
-        <td className="px-3 py-2.5 text-xs text-muted-foreground">{product.product_type || '—'}</td>
-        <td className="px-3 py-2.5 text-xs text-muted-foreground">{product.vendor || '—'}</td>
-        <td className="px-3 py-2.5 text-xs font-mono">{formatPriceRange(product.price_min, product.price_max)}</td>
-        <td className="px-3 py-2.5 text-xs text-center">{product.product_variants?.length ?? 0}</td>
-        <td className="px-3 py-2.5 text-xs text-muted-foreground">
-          {product.last_changed_at ? new Date(product.last_changed_at).toLocaleDateString() : '—'}
-        </td>
-        <td className="px-3 py-2.5">
+  const overrides = (product.override_fields as Record<string, unknown>) ?? {};
+  const getVal = (field: string) => (field in overrides ? String(overrides[field] ?? '') : product[field]);
+
+  const renderCell = (col: string) => {
+    switch (col) {
+      case 'Store': return <span className="text-xs text-muted-foreground whitespace-nowrap">{product.store_name ?? '—'}</span>;
+      case 'Title': return (
+        <div className="flex items-center gap-2 max-w-52">
+          {product.image_url && <img src={product.image_url} alt="" className="w-7 h-7 rounded object-cover flex-shrink-0 border border-border" />}
+          <span className="text-xs font-medium truncate">{getVal('title') || '—'}</span>
+        </div>
+      );
+      case 'Vendor': return <span className="text-xs text-muted-foreground">{getVal('brand') || product.vendor || '—'}</span>;
+      case 'Type': return <span className="text-xs text-muted-foreground">{product.category || product.product_type || '—'}</span>;
+      case 'Price': return (
+        <div className="flex items-center gap-1">
+          {product.auth_blocked && <Lock className="w-3 h-3 text-warning flex-shrink-0" title="Auth blocked" />}
+          <span className="text-xs font-mono">
+            {product.price != null ? `$${Number(product.price).toFixed(2)}` : formatPriceRange(product.price_min, product.price_max)}
+          </span>
+        </div>
+      );
+      case 'Variants': return <span className="text-xs text-center">{product.product_variants?.length ?? 0}</span>;
+      case 'Barcode': return (
+        <span className="text-xs font-mono text-muted-foreground">{getVal('barcode') || product.gtin || '—'}</span>
+      );
+      case 'Confidence': {
+        const score = product.confidence_score ?? 0;
+        const tier = confidenceTier(score);
+        return (
           <div className="flex items-center gap-1.5">
-            {product.url && (
-              <a
-                href={product.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={e => e.stopPropagation()}
-                className="text-muted-foreground hover:text-primary transition-colors"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
-            {isExpanded
-              ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" />
-              : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+            <div className="w-12 bg-muted rounded-full h-1.5 flex-shrink-0">
+              <div className={`h-full rounded-full ${score >= 90 ? 'bg-success' : score >= 60 ? 'bg-warning' : 'bg-destructive'}`}
+                style={{ width: `${score}%` }} />
+            </div>
+            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${tier.cls}`}>{score}</span>
           </div>
+        );
+      }
+      case 'Status': return (
+        <div className="flex items-center gap-1">
+          {product.auth_blocked && (
+            <span title="Price hidden — store requires login" className="text-[9px] bg-warning/10 text-warning px-1.5 py-0.5 rounded font-semibold flex items-center gap-0.5">
+              <Lock className="w-2.5 h-2.5" /> Blocked
+            </span>
+          )}
+          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded-full ${
+            product.review_status === 'approved' ? 'bg-success/15 text-success' :
+            product.review_status === 'needs_review' ? 'bg-warning/15 text-warning' :
+            product.review_status === 'rejected' ? 'bg-destructive/15 text-destructive' :
+            'bg-muted text-muted-foreground'
+          }`}>
+            {product.review_status ?? 'pending'}
+          </span>
+        </div>
+      );
+      case 'Last Changed': return (
+        <span className="text-xs text-muted-foreground whitespace-nowrap">
+          {product.scraped_at ? new Date(product.scraped_at).toLocaleDateString() : product.last_changed_at ? new Date(product.last_changed_at).toLocaleDateString() : '—'}
+        </span>
+      );
+      case 'Actions': return (
+        <div className="flex items-center gap-1.5">
+          {(product.source_url || product.url) && (
+            <a
+              href={product.source_url || product.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className="text-muted-foreground hover:text-primary transition-colors"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
+          )}
+        </div>
+      );
+      default: return null;
+    }
+  };
+
+  return (
+    <tr
+      className={`border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer ${isSelected ? 'bg-primary/5' : ''}`}
+      onClick={onOpenDrawer}
+    >
+      <td className="px-3 py-2.5 w-8" onClick={e => { e.stopPropagation(); onToggleSelect(); }}>
+        <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} aria-label="Select" className="block" />
+      </td>
+      {ALL_COLUMNS.filter(c => visibleCols.has(c)).map(col => (
+        <td key={col} className="px-3 py-2.5">
+          {renderCell(col)}
         </td>
-      </tr>
-      {isExpanded && (
-        <tr className="border-b border-border/50 bg-muted/10">
-          <td colSpan={colCount} className="px-4 py-4">
-            <ProductRowExpanded product={product} />
-          </td>
-        </tr>
-      )}
-    </>
+      ))}
+    </tr>
   );
 }
