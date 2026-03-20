@@ -518,44 +518,71 @@ export type Database = {
       }
       scrape_run_stores: {
         Row: {
+          collections_completed: number | null
+          collections_failed: number | null
+          collections_skipped: number | null
+          collections_total: number | null
+          current_collection: string | null
+          current_strategy: string | null
           finished_at: string | null
           id: string
+          last_event_at: string | null
           message: string | null
           page_count: number
           price_changes: number
           product_count: number
           scrape_run_id: string
+          skip_requested: boolean | null
           started_at: string | null
           status: string
           store_id: string
+          terminal_status: string | null
           updated_at: string
           user_id: string
         }
         Insert: {
+          collections_completed?: number | null
+          collections_failed?: number | null
+          collections_skipped?: number | null
+          collections_total?: number | null
+          current_collection?: string | null
+          current_strategy?: string | null
           finished_at?: string | null
           id?: string
+          last_event_at?: string | null
           message?: string | null
           page_count?: number
           price_changes?: number
           product_count?: number
           scrape_run_id: string
+          skip_requested?: boolean | null
           started_at?: string | null
           status?: string
           store_id: string
+          terminal_status?: string | null
           updated_at?: string
           user_id: string
         }
         Update: {
+          collections_completed?: number | null
+          collections_failed?: number | null
+          collections_skipped?: number | null
+          collections_total?: number | null
+          current_collection?: string | null
+          current_strategy?: string | null
           finished_at?: string | null
           id?: string
+          last_event_at?: string | null
           message?: string | null
           page_count?: number
           price_changes?: number
           product_count?: number
           scrape_run_id?: string
+          skip_requested?: boolean | null
           started_at?: string | null
           status?: string
           store_id?: string
+          terminal_status?: string | null
           updated_at?: string
           user_id?: string
         }
@@ -800,49 +827,76 @@ export type Database = {
       }
       scraper_events: {
         Row: {
+          attempt_number: number | null
+          collection_handle: string | null
           created_at: string
+          duration_ms: number | null
+          ended_at: string | null
+          http_status: number | null
           id: string
           message: string
           product_id: string | null
           raw_error: string | null
           reason_code: string | null
+          retry_count: number | null
           run_id: string | null
           severity: string
           source_platform: string | null
           stage: string
           store_id: string | null
+          strategy_name: string | null
           url: string | null
           user_id: string
+          was_auto_recovered: boolean | null
+          was_operator_action: boolean | null
         }
         Insert: {
+          attempt_number?: number | null
+          collection_handle?: string | null
           created_at?: string
+          duration_ms?: number | null
+          ended_at?: string | null
+          http_status?: number | null
           id?: string
           message?: string
           product_id?: string | null
           raw_error?: string | null
           reason_code?: string | null
+          retry_count?: number | null
           run_id?: string | null
           severity?: string
           source_platform?: string | null
           stage: string
           store_id?: string | null
+          strategy_name?: string | null
           url?: string | null
           user_id: string
+          was_auto_recovered?: boolean | null
+          was_operator_action?: boolean | null
         }
         Update: {
+          attempt_number?: number | null
+          collection_handle?: string | null
           created_at?: string
+          duration_ms?: number | null
+          ended_at?: string | null
+          http_status?: number | null
           id?: string
           message?: string
           product_id?: string | null
           raw_error?: string | null
           reason_code?: string | null
+          retry_count?: number | null
           run_id?: string | null
           severity?: string
           source_platform?: string | null
           stage?: string
           store_id?: string | null
+          strategy_name?: string | null
           url?: string | null
           user_id?: string
+          was_auto_recovered?: boolean | null
+          was_operator_action?: boolean | null
         }
         Relationships: [
           {
