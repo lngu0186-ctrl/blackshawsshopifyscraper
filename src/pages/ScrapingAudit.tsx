@@ -1077,9 +1077,32 @@ function Part7({ storeRows }: { storeRows: StoreAuditRow[] }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ScrapingAudit() {
+  const { user } = useAuth();
   const { data: storeRows = [], isLoading: storeLoading } = useStoreAudit();
   const { data: catRows = [], isLoading: catLoading } = useCategoryAudit();
   const { data: eventSummary = [], isLoading: evtLoading } = useEventSummary();
+  const { data: nullEventStats = { total: 0, nullCount: 0 } } = useNullStoreIdEventCount();
+  const { data: pagesVisitedRuns = [] } = usePagesVisited();
+
+  // Detect-platforms mutation (Block 6)
+  const detectPlatforms = useMutation({
+    mutationFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/detect-platforms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast.success(`Platform detection complete — ${data.processed} stores processed`);
+    },
+    onError: (e: any) => toast.error(e.message || 'Platform detection failed'),
+  });
 
   const isLoading = storeLoading || catLoading || evtLoading;
 
@@ -1098,6 +1121,10 @@ export default function ScrapingAudit() {
     return f.color === 'text-success';
   }).length;
 
+  // Pagination tracking: total pages across all tracked runs
+  const totalPagesTracked = pagesVisitedRuns.reduce((a: number, r: any) => a + (r.pages_visited ?? 0), 0);
+  const hasPageTracking = totalPagesTracked > 0;
+
   return (
     <ScrollArea className="h-full">
       <div className="p-6 max-w-7xl mx-auto">
@@ -1113,6 +1140,7 @@ export default function ScrapingAudit() {
             Where data was not tracked, this is explicitly stated.
           </p>
         </div>
+
 
         {/* Top KPIs */}
         <div className="grid grid-cols-6 gap-3 mb-6">
