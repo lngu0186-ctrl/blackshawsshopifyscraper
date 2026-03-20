@@ -350,9 +350,9 @@ export function AddStoreModal({ open, onOpenChange }: Props) {
         {/* ── Step 3: Auth credentials ────────────────────────────────────────── */}
         {showAuthStep && (
           <div className="space-y-4 mt-2">
-            <Alert className="border-amber-500/30 bg-amber-500/5">
-              <Lock className="h-4 w-4 text-amber-500" />
-              <AlertDescription className="text-amber-700 dark:text-amber-400">
+            <Alert className="border-warning/30 bg-warning/5">
+              <Lock className="h-4 w-4 text-warning" />
+              <AlertDescription className="text-warning">
                 {authType === 'customer_account'
                   ? 'This store requires a customer account login to access products.'
                   : 'This store requires a password to access products.'}
