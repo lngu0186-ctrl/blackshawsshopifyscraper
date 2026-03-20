@@ -12,23 +12,29 @@ export interface PriceResult {
 // Strip currency symbols, commas, non-breaking spaces; return parsed float or null
 export function parsePrice(raw: string | null | undefined): number | null {
   if (!raw) return null;
-  const cleaned = raw
-    .replace(/[^\\d.,]/g, '') // strip everything except digits, dot, comma
-    .replace(/,(\\d{2})$/, '.$1') // European comma decimal (e.g. \"12,99\")
-    .replace(/,/g, '');           // remove thousand separators
+  // Remove everything except digits, dot, comma
+  let cleaned = '';
+  for (const ch of String(raw)) {
+    if ((ch >= '0' && ch <= '9') || ch === '.' || ch === ',') cleaned += ch;
+  }
+  if (cleaned.length === 0) return null;
+  // European comma decimal: "12,99" at end → "12.99"
+  cleaned = cleaned.replace(/,(\d{2})$/, '.$1');
+  // Remove remaining commas (thousand separators)
+  cleaned = cleaned.replace(/,/g, '');
   const value = parseFloat(cleaned);
   if (isNaN(value) || value <= 0) return null;
   return value;
 }
 
-// Reject \"save $X\", \"save X%\" patterns — these are not product prices
+// Reject "save $X", "save X%" patterns — these are not product prices
 function isSavingsString(s: string): boolean {
-  return /save\s*\\$|\bsave\s+\d|discount|off\b/i.test(s);
+  return /save\s*[$]|\bsave\s+\d|discount|off\b/i.test(s);
 }
 
-// Detect \"from $X\" pattern
+// Detect "from $X" pattern
 function isFromPrice(s: string): boolean {
-  return /^from\s*\\$?/i.test(s.trim());
+  return /^from\s*[$]?/i.test(s.trim());
 }
 
 interface PriceSource {
@@ -89,7 +95,7 @@ export function extractPriceFromJsonLd(jsonLd: Record<string, unknown>): Partial
   // offers may be a single object or an array
   const offerList: any[] = Array.isArray(offers) ? offers : [offers];
 
-  // Find lowest \"InStock\" offer price
+  // Find lowest "InStock" offer price
   let minPrice: number | null = null;
   let regularPrice: number | null = null;
 
