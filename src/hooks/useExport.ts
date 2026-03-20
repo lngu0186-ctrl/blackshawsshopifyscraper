@@ -35,9 +35,9 @@ export function useExport() {
   const queryClient = useQueryClient();
 
   const exportShopifyCsv = useMutation({
-    mutationFn: async ({ storeIds, changedOnly }: { storeIds?: string[]; changedOnly?: boolean }) => {
+    mutationFn: async ({ storeIds, changedOnly, productIds }: { storeIds?: string[]; changedOnly?: boolean; productIds?: string[] }) => {
       const settings = getSettings();
-      const products = await fetchProductsForExport(user!.id, storeIds, changedOnly);
+      const products = await fetchProductsForExport(user!.id, storeIds, changedOnly, productIds);
       if (products.length === 0) {
         toast.info('No products to export');
         return;
