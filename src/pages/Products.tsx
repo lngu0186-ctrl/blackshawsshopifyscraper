@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import { useProducts, useProductFilters } from '@/hooks/useProducts';
 import { useStores } from '@/hooks/useStores';
+import { useExport } from '@/hooks/useExport';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp, Download, X } from 'lucide-react';
 import { formatPriceRange } from '@/lib/url';
 import type { ProductFilter } from '@/types/schemas';
 import { ProductRowExpanded } from '@/components/ProductRowExpanded';

@@ -10,13 +10,15 @@ import { getSettings } from '@/lib/scrapeClient';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
-async function fetchProductsForExport(userId: string, storeIds?: string[], changedOnly = false) {
+async function fetchProductsForExport(userId: string, storeIds?: string[], changedOnly = false, productIds?: string[]) {
   let query = supabase
     .from('products')
     .select('*, product_variants(*)')
     .eq('user_id', userId);
 
-  if (storeIds && storeIds.length > 0) {
+  if (productIds && productIds.length > 0) {
+    query = query.in('id', productIds);
+  } else if (storeIds && storeIds.length > 0) {
     query = query.in('store_id', storeIds);
   }
   if (changedOnly) {
