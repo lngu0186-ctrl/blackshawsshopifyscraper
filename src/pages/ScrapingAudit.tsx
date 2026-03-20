@@ -217,6 +217,46 @@ function useEventSummary() {
   });
 }
 
+// Live count of scraper_events where store_id IS NULL
+function useNullStoreIdEventCount() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['audit_null_store_events', user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const [totalRes, nullRes] = await Promise.all([
+        supabase.from('scraper_events').select('id', { count: 'exact', head: true }).eq('user_id', user!.id),
+        supabase.from('scraper_events').select('id', { count: 'exact', head: true }).eq('user_id', user!.id).is('store_id', null),
+      ]);
+      return {
+        total: totalRes.count ?? 0,
+        nullCount: nullRes.count ?? 0,
+      };
+    },
+  });
+}
+
+// Live pages_visited per store (from scrape_run_stores page_count + scrape_runs pages_visited)
+function usePagesVisited() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['audit_pages_visited', user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
+    queryFn: async () => {
+      // Get latest completed scrape_runs with pages_visited
+      const { data } = await supabase
+        .from('scrape_runs')
+        .select('id, pages_visited, finished_at, status')
+        .eq('user_id', user!.id)
+        .order('finished_at', { ascending: false })
+        .limit(20);
+      return data ?? [];
+    },
+  });
+}
+
 // ─── Sub-components ──────────────────────────────────────────────────────────
 function SeverityBadge({ sev }: { sev: string }) {
   const cls = sev === 'critical' ? 'bg-destructive/10 text-destructive border-destructive/30'
