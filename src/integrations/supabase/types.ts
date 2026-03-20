@@ -47,6 +47,39 @@ export type Database = {
         }
         Relationships: []
       }
+      product_edit_history: {
+        Row: {
+          edit_source: string
+          edited_at: string
+          field_name: string
+          id: string
+          new_value: string | null
+          old_value: string | null
+          product_id: string
+          user_id: string
+        }
+        Insert: {
+          edit_source?: string
+          edited_at?: string
+          field_name: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          product_id: string
+          user_id: string
+        }
+        Update: {
+          edit_source?: string
+          edited_at?: string
+          field_name?: string
+          id?: string
+          new_value?: string | null
+          old_value?: string | null
+          product_id?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       product_variants: {
         Row: {
           barcode: string | null
@@ -269,14 +302,21 @@ export type Database = {
         Row: {
           ai_analysis: string | null
           ai_recommendation: string | null
+          auth_blocked_fields: string[] | null
+          auth_required: boolean | null
+          auth_status_detail: string | null
+          configured_limit_hit: boolean | null
           created_at: string
           debug_payload: Json | null
           duration_ms: number | null
+          export_truncated: boolean | null
           extracted_value_preview: string | null
           failure_reason: string | null
           field_name: string | null
           http_status: number | null
           id: string
+          limit_name: string | null
+          limit_value: number | null
           missing_fields: string[] | null
           parser_used: string | null
           raw_error: string | null
@@ -294,14 +334,21 @@ export type Database = {
         Insert: {
           ai_analysis?: string | null
           ai_recommendation?: string | null
+          auth_blocked_fields?: string[] | null
+          auth_required?: boolean | null
+          auth_status_detail?: string | null
+          configured_limit_hit?: boolean | null
           created_at?: string
           debug_payload?: Json | null
           duration_ms?: number | null
+          export_truncated?: boolean | null
           extracted_value_preview?: string | null
           failure_reason?: string | null
           field_name?: string | null
           http_status?: number | null
           id?: string
+          limit_name?: string | null
+          limit_value?: number | null
           missing_fields?: string[] | null
           parser_used?: string | null
           raw_error?: string | null
@@ -319,14 +366,21 @@ export type Database = {
         Update: {
           ai_analysis?: string | null
           ai_recommendation?: string | null
+          auth_blocked_fields?: string[] | null
+          auth_required?: boolean | null
+          auth_status_detail?: string | null
+          configured_limit_hit?: boolean | null
           created_at?: string
           debug_payload?: Json | null
           duration_ms?: number | null
+          export_truncated?: boolean | null
           extracted_value_preview?: string | null
           failure_reason?: string | null
           field_name?: string | null
           http_status?: number | null
           id?: string
+          limit_name?: string | null
+          limit_value?: number | null
           missing_fields?: string[] | null
           parser_used?: string | null
           raw_error?: string | null
@@ -563,7 +617,10 @@ export type Database = {
       }
       scraped_products: {
         Row: {
+          auth_blocked: boolean
+          auth_blocked_fields: string[] | null
           availability_text: string | null
+          barcode: string | null
           brand: string | null
           category: string | null
           category_path: string[]
@@ -574,6 +631,8 @@ export type Database = {
           detail_fetch_attempts: number
           detail_fetch_error: string | null
           detail_scraped: boolean
+          ean: string | null
+          edited_fields: Json | null
           enriched_at: string | null
           external_id: string | null
           first_seen_at: string
@@ -582,13 +641,20 @@ export type Database = {
           image_url: string | null
           image_urls: string[]
           in_stock: boolean | null
+          is_approved: boolean
+          is_manually_edited: boolean
           last_exported_at: string | null
           listing_scraped: boolean
           missing_fields: string[]
+          mpn: string | null
+          notes: string | null
+          override_fields: Json | null
           price: number | null
           price_text: string | null
           raw_detail: Json | null
+          raw_identifiers: Json | null
           raw_listing: Json | null
+          review_status: string
           scrape_method: string
           scrape_status: string
           scraped_at: string
@@ -599,11 +665,15 @@ export type Database = {
           source_url: string
           tags: string[]
           title: string
+          upc: string | null
           user_id: string
           was_price: number | null
         }
         Insert: {
+          auth_blocked?: boolean
+          auth_blocked_fields?: string[] | null
           availability_text?: string | null
+          barcode?: string | null
           brand?: string | null
           category?: string | null
           category_path?: string[]
@@ -614,6 +684,8 @@ export type Database = {
           detail_fetch_attempts?: number
           detail_fetch_error?: string | null
           detail_scraped?: boolean
+          ean?: string | null
+          edited_fields?: Json | null
           enriched_at?: string | null
           external_id?: string | null
           first_seen_at?: string
@@ -622,13 +694,20 @@ export type Database = {
           image_url?: string | null
           image_urls?: string[]
           in_stock?: boolean | null
+          is_approved?: boolean
+          is_manually_edited?: boolean
           last_exported_at?: string | null
           listing_scraped?: boolean
           missing_fields?: string[]
+          mpn?: string | null
+          notes?: string | null
+          override_fields?: Json | null
           price?: number | null
           price_text?: string | null
           raw_detail?: Json | null
+          raw_identifiers?: Json | null
           raw_listing?: Json | null
+          review_status?: string
           scrape_method?: string
           scrape_status?: string
           scraped_at?: string
@@ -639,11 +718,15 @@ export type Database = {
           source_url: string
           tags?: string[]
           title: string
+          upc?: string | null
           user_id: string
           was_price?: number | null
         }
         Update: {
+          auth_blocked?: boolean
+          auth_blocked_fields?: string[] | null
           availability_text?: string | null
+          barcode?: string | null
           brand?: string | null
           category?: string | null
           category_path?: string[]
@@ -654,6 +737,8 @@ export type Database = {
           detail_fetch_attempts?: number
           detail_fetch_error?: string | null
           detail_scraped?: boolean
+          ean?: string | null
+          edited_fields?: Json | null
           enriched_at?: string | null
           external_id?: string | null
           first_seen_at?: string
@@ -662,13 +747,20 @@ export type Database = {
           image_url?: string | null
           image_urls?: string[]
           in_stock?: boolean | null
+          is_approved?: boolean
+          is_manually_edited?: boolean
           last_exported_at?: string | null
           listing_scraped?: boolean
           missing_fields?: string[]
+          mpn?: string | null
+          notes?: string | null
+          override_fields?: Json | null
           price?: number | null
           price_text?: string | null
           raw_detail?: Json | null
+          raw_identifiers?: Json | null
           raw_listing?: Json | null
+          review_status?: string
           scrape_method?: string
           scrape_status?: string
           scraped_at?: string
@@ -679,8 +771,42 @@ export type Database = {
           source_url?: string
           tags?: string[]
           title?: string
+          upc?: string | null
           user_id?: string
           was_price?: number | null
+        }
+        Relationships: []
+      }
+      scraper_settings: {
+        Row: {
+          enrichment_batch_size: number
+          id: string
+          inter_request_delay_ms: number
+          max_concurrent_enrichments: number
+          max_export_rows: number
+          max_pages_per_source: number
+          max_products_per_run: number
+          user_id: string
+        }
+        Insert: {
+          enrichment_batch_size?: number
+          id?: string
+          inter_request_delay_ms?: number
+          max_concurrent_enrichments?: number
+          max_export_rows?: number
+          max_pages_per_source?: number
+          max_products_per_run?: number
+          user_id: string
+        }
+        Update: {
+          enrichment_batch_size?: number
+          id?: string
+          inter_request_delay_ms?: number
+          max_concurrent_enrichments?: number
+          max_export_rows?: number
+          max_pages_per_source?: number
+          max_products_per_run?: number
+          user_id?: string
         }
         Relationships: []
       }
@@ -724,6 +850,7 @@ export type Database = {
       }
       stores: {
         Row: {
+          auth_blocked_reason: string | null
           auth_cookie: string | null
           auth_cookie_expires_at: string | null
           auth_email: string | null
@@ -736,6 +863,7 @@ export type Database = {
           enabled: boolean
           health_status: string
           id: string
+          last_auth_at: string | null
           last_auth_attempt_at: string | null
           last_failure_at: string | null
           last_failure_reason: string | null
@@ -755,6 +883,7 @@ export type Database = {
           validation_status: string
         }
         Insert: {
+          auth_blocked_reason?: string | null
           auth_cookie?: string | null
           auth_cookie_expires_at?: string | null
           auth_email?: string | null
@@ -767,6 +896,7 @@ export type Database = {
           enabled?: boolean
           health_status?: string
           id?: string
+          last_auth_at?: string | null
           last_auth_attempt_at?: string | null
           last_failure_at?: string | null
           last_failure_reason?: string | null
@@ -786,6 +916,7 @@ export type Database = {
           validation_status?: string
         }
         Update: {
+          auth_blocked_reason?: string | null
           auth_cookie?: string | null
           auth_cookie_expires_at?: string | null
           auth_email?: string | null
@@ -798,6 +929,7 @@ export type Database = {
           enabled?: boolean
           health_status?: string
           id?: string
+          last_auth_at?: string | null
           last_auth_attempt_at?: string | null
           last_failure_at?: string | null
           last_failure_reason?: string | null
