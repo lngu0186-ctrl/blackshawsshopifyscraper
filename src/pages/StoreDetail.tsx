@@ -1,12 +1,66 @@
+/**
+ * StoreDetail page — Block 6: Store health panel with operational metrics.
+ */
 import { useParams } from 'react-router-dom';
 import { useStores, useUpdateStore } from '@/hooks/useStores';
 import { useStoreMetricsHistory } from '@/hooks/usePriceHistory';
 import { useProducts } from '@/hooks/useProducts';
+import { useStoreHealth } from '@/hooks/useStoreHealth';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
-import { Package, TrendingDown, Clock, ExternalLink, Loader2, Power } from 'lucide-react';
+import {
+  Package, TrendingDown, Clock, ExternalLink, Loader2, Power,
+  CheckCircle2, AlertTriangle, XCircle, Activity, Image, FileText, Tag,
+  ShieldAlert, Zap, Globe,
+} from 'lucide-react';
 import { formatPrice } from '@/lib/url';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { cn } from '@/lib/utils';
+
+// ── Health badge ───────────────────────────────────────────────────────────────
+function HealthBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string; icon: any }> = {
+    healthy:      { label: 'Healthy',      cls: 'bg-success/15 text-success border-success/30',         icon: CheckCircle2 },
+    degraded:     { label: 'Degraded',     cls: 'bg-warning/15 text-warning border-warning/30',         icon: AlertTriangle },
+    failing:      { label: 'Failing',      cls: 'bg-destructive/15 text-destructive border-destructive/30', icon: XCircle },
+    blocked:      { label: 'Blocked',      cls: 'bg-destructive/15 text-destructive border-destructive/30', icon: ShieldAlert },
+    auth_required:{ label: 'Auth Required', cls: 'bg-warning/15 text-warning border-warning/30',         icon: ShieldAlert },
+    unknown:      { label: 'Unknown',      cls: 'bg-muted text-muted-foreground border-border',          icon: Activity },
+  };
+  const s = map[status] ?? map.unknown;
+  const Icon = s.icon;
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[12px] font-semibold border', s.cls)}>
+      <Icon className="w-3.5 h-3.5" />
+      {s.label}
+    </span>
+  );
+}
+
+// ── Missing rate bar ───────────────────────────────────────────────────────────
+function MissingBar({ label, pct, icon: Icon }: { label: string; pct: number; icon: any }) {
+  const color = pct >= 40 ? 'bg-destructive' : pct >= 20 ? 'bg-warning' : 'bg-success';
+  return (
+    <div className="space-y-1">
+      <div className="flex items-center justify-between text-[11px]">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Icon className="w-3 h-3" />
+          {label}
+        </span>
+        <span className={cn('font-semibold tabular-nums',
+          pct >= 40 ? 'text-destructive' : pct >= 20 ? 'text-warning' : 'text-success'
+        )}>
+          {pct}% missing
+        </span>
+      </div>
+      <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+        <div className={cn('h-full rounded-full transition-all', color)} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  );
+}
 
 export default function StoreDetail() {
   const { id } = useParams<{ id: string }>();
@@ -15,6 +69,7 @@ export default function StoreDetail() {
   const store = stores?.find(s => s.id === id);
   const { data: metrics } = useStoreMetricsHistory(id ?? null);
   const { data: _productsData } = useProducts({ page: 1, pageSize: 5, storeId: id, sortBy: 'scraped_at', sortDir: 'desc' });
+  const { data: health, isLoading: healthLoading } = useStoreHealth(id);
 
   if (!store) return (
     <div className="flex items-center justify-center h-64">
@@ -29,23 +84,27 @@ export default function StoreDetail() {
     changes: m.price_changes,
   })) ?? [];
 
+  const scrapeabilityScore = (store as any).scrapeability_score ?? 0;
+  const platform = (store as any).platform ?? 'unknown';
+  const storeType = (store as any).store_type ?? 'unknown';
+
   return (
     <div className="p-6 space-y-6 max-w-4xl overflow-y-auto h-full">
       {/* Header */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">{store.name}</h1>
+          <div className="flex items-center gap-3 mb-1 flex-wrap">
+            <h1 className="text-2xl font-bold text-foreground">{store.name}</h1>
+            {health && <HealthBadge status={health.healthBadge} />}
+          </div>
           <a href={store.url} target="_blank" rel="noopener noreferrer"
             className="text-sm text-muted-foreground hover:text-primary flex items-center gap-1 mt-1">
             {store.normalized_url} <ExternalLink className="w-3 h-3" />
           </a>
         </div>
 
-        {/* Enable / Disable toggle — prominently placed */}
         <div className={`flex items-center gap-3 px-4 py-3 rounded-xl border-2 transition-colors ${
-          store.enabled
-            ? 'border-primary/40 bg-primary/5'
-            : 'border-border bg-muted/40'
+          store.enabled ? 'border-primary/40 bg-primary/5' : 'border-border bg-muted/40'
         }`}>
           <Power className={`w-4 h-4 ${store.enabled ? 'text-primary' : 'text-muted-foreground'}`} />
           <Label
@@ -57,15 +116,107 @@ export default function StoreDetail() {
           <Switch
             id={`store-toggle-${store.id}`}
             checked={store.enabled}
-            onCheckedChange={(checked) =>
-              updateStore.mutate({ id: store.id, enabled: checked })
-            }
+            onCheckedChange={(checked) => updateStore.mutate({ id: store.id, enabled: checked })}
             disabled={updateStore.isPending}
           />
         </div>
       </div>
 
-      {/* KPI cards */}
+      {/* ── Store Health Panel ─────────────────────────────────────────────────── */}
+      <div className="bg-card rounded-2xl border border-border shadow-card p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[13px] font-bold text-foreground">Store Health</h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            {platform !== 'unknown' && (
+              <Badge variant="outline" className="text-[10px] uppercase">{platform}</Badge>
+            )}
+            {storeType !== 'unknown' && (
+              <Badge variant="outline" className="text-[10px]">{storeType.replace(/_/g, ' ')}</Badge>
+            )}
+          </div>
+        </div>
+
+        {/* Scrapeability score */}
+        {scrapeabilityScore > 0 && (
+          <div>
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className="text-muted-foreground flex items-center gap-1"><Zap className="w-3 h-3" />Scrapeability</span>
+              <span className={cn('font-bold tabular-nums',
+                scrapeabilityScore >= 80 ? 'text-success' : scrapeabilityScore >= 60 ? 'text-warning' : 'text-destructive'
+              )}>
+                {scrapeabilityScore}/100
+              </span>
+            </div>
+            <Progress
+              value={scrapeabilityScore}
+              className={cn('h-1.5',
+                scrapeabilityScore >= 80 ? '[&>div]:bg-success' : scrapeabilityScore >= 60 ? '[&>div]:bg-warning' : '[&>div]:bg-destructive'
+              )}
+            />
+          </div>
+        )}
+
+        {/* Product counts grid */}
+        {healthLoading ? (
+          <div className="grid grid-cols-4 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-muted/40 rounded-xl p-3 h-14 animate-pulse" />
+            ))}
+          </div>
+        ) : health && (
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {[
+              { label: 'Discovered',       value: health.discovered,      color: 'text-foreground' },
+              { label: 'Enriched',         value: health.enriched,        color: 'text-success' },
+              { label: 'Ready',            value: health.ready,           color: 'text-success' },
+              { label: 'Review Required',  value: health.reviewRequired,  color: health.reviewRequired > 0 ? 'text-warning' : 'text-muted-foreground' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="bg-muted/40 rounded-xl p-3">
+                <p className={cn('text-[18px] font-bold tabular-nums', color)}>{value.toLocaleString()}</p>
+                <p className="text-[10px] text-muted-foreground mt-0.5">{label}</p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Missing rates */}
+        {health && health.totalProducts > 0 && (
+          <div className="space-y-2.5">
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Field Coverage</p>
+            <MissingBar label="Price"       pct={health.missingPricePct}       icon={Tag} />
+            <MissingBar label="Images"      pct={health.missingImagePct}       icon={Image} />
+            <MissingBar label="Description" pct={health.missingDescriptionPct} icon={FileText} />
+          </div>
+        )}
+
+        {/* Failures */}
+        {health && (
+          <div className="flex items-center gap-4 text-[11px] pt-1 border-t border-border">
+            <div className="flex items-center gap-1.5">
+              <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+              <span className="text-muted-foreground">Failures last 7 days:</span>
+              <span className={cn('font-bold tabular-nums',
+                health.failuresLast7Days >= 3 ? 'text-destructive' : health.failuresLast7Days > 0 ? 'text-warning' : 'text-success'
+              )}>
+                {health.failuresLast7Days}
+              </span>
+            </div>
+            {(store as any).antibot_suspected && (
+              <span className="text-warning flex items-center gap-1">
+                <ShieldAlert className="w-3.5 h-3.5" /> Anti-bot suspected
+              </span>
+            )}
+            {store.last_scraped_at && (
+              <div className="flex items-center gap-1.5 ml-auto">
+                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Last scraped {new Date(store.last_scraped_at).toLocaleDateString()}</span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Legacy KPI cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="rounded-lg border border-border bg-card p-4">
           <div className="flex items-center gap-2 text-muted-foreground mb-1"><Package className="w-3.5 h-3.5" /><span className="text-xs">Products</span></div>
@@ -117,4 +268,3 @@ export default function StoreDetail() {
     </div>
   );
 }
-
