@@ -4,60 +4,71 @@
 
 @layer base {
   :root {
-    /* Dark pharmacy dashboard — deep navy base */
-    --background: 222 20% 8%;
-    --foreground: 210 40% 96%;
+    /* ─── Light workspace ─────────────────────────────────────── */
+    --background: 220 20% 97%;
+    --foreground: 224 24% 12%;
 
-    --card: 222 20% 11%;
-    --card-foreground: 210 40% 96%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 24% 12%;
 
-    --popover: 222 20% 11%;
-    --popover-foreground: 210 40% 96%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 224 24% 12%;
 
-    --primary: 158 64% 52%;
-    --primary-foreground: 222 20% 8%;
+    /* Purple primary */
+    --primary: 252 82% 60%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 222 20% 16%;
-    --secondary-foreground: 210 40% 96%;
+    --secondary: 220 16% 94%;
+    --secondary-foreground: 224 24% 28%;
 
-    --muted: 222 20% 14%;
-    --muted-foreground: 215 16% 56%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 220 12% 52%;
 
-    --accent: 158 64% 52%;
-    --accent-foreground: 222 20% 8%;
+    --accent: 252 82% 60%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 58%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive: 0 72% 56%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 222 20% 18%;
-    --input: 222 20% 16%;
-    --ring: 158 64% 52%;
+    --warning: 38 95% 52%;
+    --warning-foreground: 0 0% 100%;
 
-    --radius: 0.5rem;
+    --success: 142 72% 40%;
+    --success-foreground: 0 0% 100%;
 
-    /* Sidebar */
-    --sidebar-background: 222 20% 6%;
-    --sidebar-foreground: 210 35% 82%;
-    --sidebar-primary: 158 64% 52%;
-    --sidebar-primary-foreground: 222 20% 6%;
-    --sidebar-accent: 222 20% 13%;
-    --sidebar-accent-foreground: 210 40% 96%;
-    --sidebar-border: 222 20% 14%;
-    --sidebar-ring: 158 64% 52%;
+    --border: 220 14% 89%;
+    --input: 220 14% 92%;
+    --ring: 252 82% 60%;
 
-    /* Custom tokens */
-    --price-up: 0 72% 58%;
-    --price-down: 158 64% 52%;
-    --price-neutral: 215 16% 56%;
-    --scrape-running: 38 92% 56%;
-    --scrape-complete: 158 64% 52%;
-    --scrape-error: 0 72% 58%;
-    --scrape-queued: 215 16% 56%;
+    --radius: 0.75rem;
 
-    --gradient-sidebar: linear-gradient(180deg, hsl(222 20% 6%) 0%, hsl(222 20% 7%) 100%);
-    --gradient-card: linear-gradient(135deg, hsl(222 20% 11%) 0%, hsl(222 20% 13%) 100%);
-    --shadow-card: 0 4px 24px -4px hsl(222 20% 4% / 0.6);
-    --shadow-glow: 0 0 20px hsl(158 64% 52% / 0.15);
+    /* ─── Dark sidebar ────────────────────────────────────────── */
+    --sidebar-background: 224 28% 10%;
+    --sidebar-foreground: 220 20% 70%;
+    --sidebar-primary: 252 82% 65%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 224 24% 16%;
+    --sidebar-accent-foreground: 220 20% 92%;
+    --sidebar-border: 224 24% 16%;
+    --sidebar-ring: 252 82% 65%;
+    --sidebar-muted: 220 18% 45%;
+
+    /* ─── Price tokens ────────────────────────────────────────── */
+    --price-up: 0 72% 56%;
+    --price-down: 142 72% 40%;
+    --price-neutral: 220 12% 52%;
+
+    /* ─── Scrape status ───────────────────────────────────────── */
+    --scrape-running: 38 95% 52%;
+    --scrape-complete: 142 72% 40%;
+    --scrape-error: 0 72% 56%;
+    --scrape-queued: 220 12% 52%;
+
+    /* ─── Shadows & gradients ─────────────────────────────────── */
+    --shadow-card: 0 1px 3px 0 hsl(220 20% 10% / 0.06), 0 1px 2px -1px hsl(220 20% 10% / 0.06);
+    --shadow-card-md: 0 4px 16px -4px hsl(220 20% 10% / 0.10), 0 2px 6px -2px hsl(220 20% 10% / 0.06);
+    --shadow-glow: 0 0 24px hsl(252 82% 60% / 0.18);
+    --gradient-card: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
   }
 }
 
@@ -69,31 +80,45 @@
     @apply bg-background text-foreground antialiased;
     font-family: 'Inter', system-ui, sans-serif;
   }
-  ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
-  }
-  ::-webkit-scrollbar-track {
-    background: hsl(var(--background));
-  }
-  ::-webkit-scrollbar-thumb {
-    background: hsl(var(--border));
-    border-radius: 3px;
-  }
-  ::-webkit-scrollbar-thumb:hover {
-    background: hsl(var(--muted-foreground));
-  }
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
 }
 
 @layer utilities {
-  .price-up { color: hsl(var(--price-up)); }
+  .price-up   { color: hsl(var(--price-up)); }
   .price-down { color: hsl(var(--price-down)); }
   .price-neutral { color: hsl(var(--price-neutral)); }
-  .gradient-card { background: var(--gradient-card); }
-  .shadow-card { box-shadow: var(--shadow-card); }
-  .shadow-glow { box-shadow: var(--shadow-glow); }
-  .status-running { color: hsl(var(--scrape-running)); }
+
+  .shadow-card    { box-shadow: var(--shadow-card); }
+  .shadow-card-md { box-shadow: var(--shadow-card-md); }
+  .shadow-glow    { box-shadow: var(--shadow-glow); }
+  .gradient-card  { background: var(--gradient-card); }
+
+  .status-running  { color: hsl(var(--scrape-running)); }
   .status-complete { color: hsl(var(--scrape-complete)); }
-  .status-error { color: hsl(var(--scrape-error)); }
-  .status-queued { color: hsl(var(--scrape-queued)); }
+  .status-error    { color: hsl(var(--scrape-error)); }
+  .status-queued   { color: hsl(var(--scrape-queued)); }
+
+  /* Sidebar-scoped text helpers */
+  .text-sidebar-muted { color: hsl(var(--sidebar-muted)); }
+
+  /* Animated pulse ring for running states */
+  @keyframes pulse-ring {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(1.05); }
+  }
+  .animate-pulse-ring { animation: pulse-ring 1.8s ease-in-out infinite; }
+
+  /* Smooth count-up shimmer */
+  @keyframes shimmer {
+    0%   { background-position: -400px 0; }
+    100% { background-position: 400px 0; }
+  }
+  .animate-shimmer {
+    background: linear-gradient(90deg, hsl(var(--muted)) 25%, hsl(var(--border)) 50%, hsl(var(--muted)) 75%);
+    background-size: 800px 100%;
+    animation: shimmer 1.4s infinite linear;
+  }
 }
