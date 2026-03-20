@@ -380,7 +380,7 @@ export default function Export() {
                   <FileSpreadsheet className="w-4 h-4 text-primary" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Export Full Raw Excel</p>
-                    <p className="text-xs text-muted-foreground">{allProducts.length.toLocaleString()} rows — all data + debug columns</p>
+                    <p className="text-xs text-muted-foreground">{totalProducts.toLocaleString()} rows — all data + debug columns</p>
                   </div>
                 </Button>
 
