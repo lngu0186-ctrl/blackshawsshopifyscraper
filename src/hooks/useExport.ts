@@ -10,13 +10,15 @@ import { getSettings } from '@/lib/scrapeClient';
 import { toast } from 'sonner';
 import * as XLSX from 'xlsx';
 
-async function fetchProductsForExport(userId: string, storeIds?: string[], changedOnly = false) {
+async function fetchProductsForExport(userId: string, storeIds?: string[], changedOnly = false, productIds?: string[]) {
   let query = supabase
     .from('products')
     .select('*, product_variants(*)')
     .eq('user_id', userId);
 
-  if (storeIds && storeIds.length > 0) {
+  if (productIds && productIds.length > 0) {
+    query = query.in('id', productIds);
+  } else if (storeIds && storeIds.length > 0) {
     query = query.in('store_id', storeIds);
   }
   if (changedOnly) {
@@ -33,9 +35,9 @@ export function useExport() {
   const queryClient = useQueryClient();
 
   const exportShopifyCsv = useMutation({
-    mutationFn: async ({ storeIds, changedOnly }: { storeIds?: string[]; changedOnly?: boolean }) => {
+    mutationFn: async ({ storeIds, changedOnly, productIds }: { storeIds?: string[]; changedOnly?: boolean; productIds?: string[] }) => {
       const settings = getSettings();
-      const products = await fetchProductsForExport(user!.id, storeIds, changedOnly);
+      const products = await fetchProductsForExport(user!.id, storeIds, changedOnly, productIds);
       if (products.length === 0) {
         toast.info('No products to export');
         return;
@@ -53,7 +55,7 @@ export function useExport() {
       // Log export run
       await supabase.from('export_runs').insert({
         user_id: user!.id,
-        scope: storeIds ? 'selected' : 'all',
+        scope: productIds ? 'selected' : storeIds ? 'selected' : 'all',
         store_ids: storeIds ? storeIds : null,
         changed_only: changedOnly ?? false,
         export_type: 'shopify_csv',
@@ -61,9 +63,9 @@ export function useExport() {
       });
 
       // Update last_exported_at
-      const productIds = products.map((p: any) => p.id);
+      const exportedIds = products.map((p: any) => p.id);
       await supabase.from('products').update({ last_exported_at: new Date().toISOString() })
-        .in('id', productIds);
+        .in('id', exportedIds);
 
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast.success(`Exported ${rows.length} rows`);

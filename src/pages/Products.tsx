@@ -1,11 +1,13 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useProducts, useProductFilters } from '@/hooks/useProducts';
 import { useStores } from '@/hooks/useStores';
+import { useExport } from '@/hooks/useExport';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Search, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Search, ChevronLeft, ChevronRight, ExternalLink, ChevronDown, ChevronUp, Download, X, Loader2 } from 'lucide-react';
 import { formatPriceRange } from '@/lib/url';
 import type { ProductFilter } from '@/types/schemas';
 import { ProductRowExpanded } from '@/components/ProductRowExpanded';
@@ -15,16 +17,43 @@ const DEFAULT_FILTER: ProductFilter = { page: 1, pageSize: 50, sortBy: 'scraped_
 export default function Products() {
   const [filter, setFilter] = useState<ProductFilter>(DEFAULT_FILTER);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const { data, isLoading } = useProducts(filter);
   const { data: filters } = useProductFilters();
   const { data: stores } = useStores();
+  const { exportShopifyCsv } = useExport();
   const products = data?.products ?? [];
   const total = data?.total ?? 0;
   const totalPages = Math.ceil(total / filter.pageSize);
 
   const update = (patch: Partial<ProductFilter>) => setFilter(f => ({ ...f, ...patch, page: 1 }));
 
-  const columns = ['Store', 'Title', 'Type', 'Vendor', 'Price', 'Variants', 'Last Changed', 'Actions'];
+  const pageIds = useMemo(() => products.map((p: any) => p.id), [products]);
+  const allPageSelected = pageIds.length > 0 && pageIds.every((id: string) => selectedIds.has(id));
+  const somePageSelected = pageIds.some((id: string) => selectedIds.has(id));
+
+  const toggleAll = () => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (allPageSelected) {
+        pageIds.forEach((id: string) => next.delete(id));
+      } else {
+        pageIds.forEach((id: string) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const toggleOne = (id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const columns = ['', 'Store', 'Title', 'Type', 'Vendor', 'Price', 'Variants', 'Last Changed', 'Actions'];
 
   return (
     <div className="p-6 space-y-4 max-w-full">
@@ -88,7 +117,16 @@ export default function Products() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/30">
-                {columns.map(h => (
+                <th className="px-3 py-2.5 w-8">
+                  <Checkbox
+                    checked={allPageSelected}
+                    data-state={somePageSelected && !allPageSelected ? 'indeterminate' : undefined}
+                    onCheckedChange={toggleAll}
+                    aria-label="Select all on page"
+                    className="block"
+                  />
+                </th>
+                {columns.slice(1).map(h => (
                   <th key={h} className="text-left text-xs font-semibold text-muted-foreground px-3 py-2.5 whitespace-nowrap">{h}</th>
                 ))}
               </tr>
@@ -113,7 +151,9 @@ export default function Products() {
                   key={product.id}
                   product={product}
                   isExpanded={expanded === product.id}
-                  onToggle={() => setExpanded(expanded === product.id ? null : product.id)}
+                  isSelected={selectedIds.has(product.id)}
+                  onToggleExpand={() => setExpanded(expanded === product.id ? null : product.id)}
+                  onToggleSelect={() => toggleOne(product.id)}
                   colCount={columns.length}
                 />
               ))}
@@ -139,19 +179,50 @@ export default function Products() {
           </div>
         </div>
       )}
+
+      {/* Bulk-select floating toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-3 rounded-xl border border-border bg-card shadow-xl px-5 py-3 animate-in slide-in-from-bottom-4 duration-200">
+          <span className="text-sm font-medium text-foreground">
+            {selectedIds.size} product{selectedIds.size !== 1 ? 's' : ''} selected
+          </span>
+          <Button
+            size="sm"
+            className="h-8 gap-1.5"
+            onClick={() => exportShopifyCsv.mutate({ productIds: Array.from(selectedIds) })}
+            disabled={exportShopifyCsv.isPending}
+          >
+            {exportShopifyCsv.isPending
+              ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              : <Download className="w-3.5 h-3.5" />}
+            Export to Shopify CSV
+          </Button>
+          <button
+            onClick={() => setSelectedIds(new Set())}
+            className="text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Clear selection"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
     </div>
   );
 }
 
-function ProductRow({ product, isExpanded, onToggle, colCount }: {
-  product: any; isExpanded: boolean; onToggle: () => void; colCount: number;
+function ProductRow({ product, isExpanded, isSelected, onToggleExpand, onToggleSelect, colCount }: {
+  product: any; isExpanded: boolean; isSelected: boolean;
+  onToggleExpand: () => void; onToggleSelect: () => void; colCount: number;
 }) {
   return (
     <>
       <tr
-        className="border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer"
-        onClick={onToggle}
+        className={`border-b border-border/50 hover:bg-muted/20 transition-colors cursor-pointer ${isSelected ? 'bg-primary/5' : ''}`}
+        onClick={onToggleExpand}
       >
+        <td className="px-3 py-2.5 w-8" onClick={e => { e.stopPropagation(); onToggleSelect(); }}>
+          <Checkbox checked={isSelected} onCheckedChange={onToggleSelect} aria-label="Select product" className="block" />
+        </td>
         <td className="px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap">{product.store_name}</td>
         <td className="px-3 py-2.5 max-w-48">
           <div className="flex items-center gap-2">
