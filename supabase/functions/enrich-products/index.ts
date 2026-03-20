@@ -309,17 +309,22 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
   try {
-    const authHeader = req.headers.get('authorization') ?? '';
+    const authHeader = req.headers.get('Authorization') ?? '';
+    if (!authHeader.startsWith('Bearer ')) {
+      return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
+    }
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     const supabaseUser = createClient(supabaseUrl, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { authorization: authHeader } },
+      global: { headers: { Authorization: authHeader } },
     });
-    const { data: { user }, error: userError } = await supabaseUser.auth.getUser();
-    if (userError || !user) {
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: claimsError } = await supabaseUser.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
     }
+    const userId = claimsData.claims.sub;
 
     const supabaseAdmin = createClient(supabaseUrl, serviceKey);
     const body = await req.json();
@@ -329,12 +334,12 @@ Deno.serve(async (req) => {
     let query = supabaseAdmin
       .from('scraped_products')
       .select('*')
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('detail_scraped', false)
       .lt('detail_fetch_attempts', 3);
 
     if (product_id) {
-      query = supabaseAdmin.from('scraped_products').select('*').eq('id', product_id).eq('user_id', user.id);
+      query = supabaseAdmin.from('scraped_products').select('*').eq('id', product_id).eq('user_id', userId);
     } else if (source_key) {
       query = query.eq('source_key', source_key);
     }
@@ -389,7 +394,7 @@ Deno.serve(async (req) => {
     const { count: remaining } = await supabaseAdmin
       .from('scraped_products')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('detail_scraped', false)
       .lt('detail_fetch_attempts', 3)
       .eq('source_key', source_key ?? '');
