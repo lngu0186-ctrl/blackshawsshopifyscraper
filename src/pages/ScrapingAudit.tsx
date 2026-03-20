@@ -712,25 +712,29 @@ function Part4({ storeRows }: { storeRows: StoreAuditRow[] }) {
 }
 
 // ─── Part 5: Silent Failures ─────────────────────────────────────────────────
-function Part5({ storeRows }: { storeRows: StoreAuditRow[] }) {
+function Part5({ storeRows, nullEventStats }: { storeRows: StoreAuditRow[]; nullEventStats: { total: number; nullCount: number } }) {
   const noProducts = storeRows.filter(s => s.db_products === 0 && ['active', 'validated'].includes(s.store_status));
   const noEvents = storeRows.filter(s => s.events === 0 && s.db_products > 0);
   const allZeroConf = storeRows.filter(s => s.zero_conf === s.db_products && s.db_products > 0);
-  const orphanedEvents = storeRows.filter(s => false); // computed below at page level
-  const totalEventsNoStoreId = 401; // from DB query: 401 of 438 events have no store_id
+  const nullPct = nullEventStats.total > 0 ? Math.round((nullEventStats.nullCount / nullEventStats.total) * 100) : 0;
+  const isFixed = nullEventStats.nullCount === 0;
 
   return (
     <div className="space-y-6">
-      {/* Global finding */}
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-        <p className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-          <Bug className="w-4 h-4" /> Critical: scraper_events store linkage broken
+      {/* Global finding — live from DB */}
+      <div className={cn('rounded-lg border p-4', isFixed ? 'border-success/30 bg-success/5' : 'border-destructive/30 bg-destructive/5')}>
+        <p className={cn('text-sm font-semibold mb-2 flex items-center gap-2', isFixed ? 'text-success' : 'text-destructive')}>
+          {isFixed ? <CheckCircle2 className="w-4 h-4" /> : <Bug className="w-4 h-4" />}
+          {isFixed
+            ? 'scraper_events store linkage: ✅ Fixed'
+            : 'scraper_events store linkage: ⚠️ Events with NULL store_id'}
         </p>
         <p className="text-xs text-foreground">
-          <strong>401 of 438 total scraper_events (91.5%) have <code className="font-mono bg-muted px-1 rounded">store_id = NULL</code></strong>.
-          This means almost all diagnostic events cannot be traced back to a store. Filtering events by store on the Diagnostics page 
-          will return near-zero results for most stores. The scrape-store edge function is not passing <code className="font-mono text-xs bg-muted px-1 rounded">store_id</code> 
-          {' '}when inserting events into scraper_events.
+          {isFixed
+            ? <><strong>All {nullEventStats.total} scraper_events have store_id set.</strong> Historical NULL events were backfilled via migration. New events from the fixed scrape-store function will always include store_id.</>
+            : <><strong>{nullEventStats.nullCount.toLocaleString()} of {nullEventStats.total.toLocaleString()} total scraper_events ({nullPct}%) have <code className="font-mono bg-muted px-1 rounded">store_id = NULL</code></strong>.
+              {' '}A backfill migration has been run. Remaining NULL events could not be matched to a store via run_id. New scrapes will always include store_id.</>
+          }
         </p>
       </div>
 
