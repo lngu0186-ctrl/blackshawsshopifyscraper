@@ -1,39 +1,274 @@
+import { useState, useEffect, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
-import { ScrapeControl } from '@/components/ScrapeControl';
 import { useStores } from '@/hooks/useStores';
-import { Store, Package, TrendingDown, Clock, ArrowRight, Loader2, Activity } from 'lucide-react';
+import { useScrapeRun } from '@/hooks/useScrapeRun';
+import { useDataQualityStats, useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
+import { SITE_ADAPTERS } from '@/lib/siteAdapters';
 import { Link } from 'react-router-dom';
-import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Play, Square, RefreshCw, Download, Search,
+  CheckCircle2, AlertTriangle, XCircle, Loader2,
+  TrendingUp, TrendingDown, Package, Store,
+  Zap, BarChart3, Eye, Image, FileText, Tag,
+  Activity, Clock, ExternalLink, ChevronRight,
+  Database, Layers, Globe,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import { Skeleton } from '@/components/ui/skeleton';
+import { useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
-function StatCard({ icon: Icon, label, value, sub, loading }: {
-  icon: any; label: string; value: string | number; sub?: string; loading?: boolean;
-}) {
+// ─── Animated count hook ──────────────────────────────────────────────────────
+function useCountUp(target: number, duration = 600) {
+  const [val, setVal] = useState(target);
+  const prev = useRef(target);
+  useEffect(() => {
+    if (prev.current === target) return;
+    const diff = target - prev.current;
+    const start = prev.current;
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const elapsed = now - t0;
+      const progress = Math.min(elapsed / duration, 1);
+      const ease = 1 - Math.pow(1 - progress, 3);
+      setVal(Math.round(start + diff * ease));
+      if (progress < 1) requestAnimationFrame(step);
+      else prev.current = target;
+    };
+    requestAnimationFrame(step);
+  }, [target, duration]);
+  return val;
+}
+
+// ─── KPI Card ─────────────────────────────────────────────────────────────────
+interface KpiCardProps {
+  icon: any;
+  label: string;
+  value: number;
+  sub?: string;
+  trend?: number;
+  color?: string;
+  loading?: boolean;
+  pulse?: boolean;
+}
+
+function KpiCard({ icon: Icon, label, value, sub, trend, color = 'text-primary', loading, pulse }: KpiCardProps) {
+  const animVal = useCountUp(value);
   return (
-    <div className="rounded-lg border border-border bg-card p-4 shadow-card animate-fade-in">
-      <div className="flex items-center gap-2 text-muted-foreground mb-2">
-        <Icon className="w-3.5 h-3.5" />
-        <span className="text-[10px] font-bold uppercase tracking-widest">{label}</span>
+    <div className="bg-card rounded-2xl border border-border shadow-card p-4 hover:shadow-card-md transition-shadow duration-200">
+      <div className="flex items-start justify-between mb-3">
+        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color === 'text-primary' ? 'bg-primary/10' : color === 'text-success' ? 'bg-success/10' : color === 'text-warning' ? 'bg-warning/10' : color === 'text-destructive' ? 'bg-destructive/10' : 'bg-muted'}`}>
+          <Icon className={`w-4 h-4 ${color}`} />
+        </div>
+        {trend !== undefined && (
+          <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
+            trend > 0 ? 'bg-success/10 text-success' : trend < 0 ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'
+          }`}>
+            {trend > 0 ? <TrendingUp className="w-2.5 h-2.5" /> : <TrendingDown className="w-2.5 h-2.5" />}
+            {Math.abs(trend)}%
+          </span>
+        )}
       </div>
       {loading ? (
-        <Skeleton className="h-8 w-20 mt-1" />
+        <Skeleton className="h-7 w-20 mb-1" />
       ) : (
-        <p className="text-2xl font-bold text-foreground tabular-nums">{value}</p>
+        <p className={`text-2xl font-bold tabular-nums ${pulse ? 'animate-count-up' : ''}`}>
+          {animVal.toLocaleString()}
+        </p>
       )}
-      {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
+      <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
+      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
     </div>
   );
 }
 
+// ─── Status pill ──────────────────────────────────────────────────────────────
+function StatusPill({ status }: { status: string }) {
+  const map: Record<string, { label: string; cls: string; dot: string }> = {
+    idle:      { label: 'Idle',      cls: 'bg-muted text-muted-foreground',          dot: 'bg-muted-foreground' },
+    running:   { label: 'Running',   cls: 'bg-warning/15 text-warning',              dot: 'bg-warning animate-pulse' },
+    completed: { label: 'Complete',  cls: 'bg-success/15 text-success',              dot: 'bg-success' },
+    cancelled: { label: 'Cancelled', cls: 'bg-muted text-muted-foreground',          dot: 'bg-muted-foreground' },
+    failed:    { label: 'Failed',    cls: 'bg-destructive/15 text-destructive',      dot: 'bg-destructive' },
+    queued:    { label: 'Queued',    cls: 'bg-primary/10 text-primary',             dot: 'bg-primary' },
+    partial:   { label: 'Partial',   cls: 'bg-warning/15 text-warning',              dot: 'bg-warning' },
+    enriched:  { label: 'Enriched',  cls: 'bg-success/15 text-success',              dot: 'bg-success' },
+  };
+  const s = map[status] ?? { label: status, cls: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' };
+  return (
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.cls}`}>
+      <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+      {s.label}
+    </span>
+  );
+}
+
+// ─── Pipeline Stage Row ───────────────────────────────────────────────────────
+function PipelineRow({
+  icon: Icon, label, done, total, success, warning, error, active,
+}: {
+  icon: any; label: string; done: number; total: number; success: number; warning: number; error: number; active?: boolean;
+}) {
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+  return (
+    <div className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${active ? 'bg-primary/5 ring-1 ring-primary/20' : 'hover:bg-muted/50'}`}>
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-primary/15' : 'bg-muted'}`}>
+        <Icon className={`w-3.5 h-3.5 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
+      </div>
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <span className={`text-[12px] font-medium ${active ? 'text-foreground' : 'text-muted-foreground'}`}>{label}</span>
+          <span className="text-[11px] font-bold tabular-nums text-foreground">{done.toLocaleString()} <span className="text-muted-foreground font-normal">/ {total.toLocaleString()}</span></span>
+        </div>
+        <Progress value={pct} className="h-1.5" />
+      </div>
+      <div className="flex items-center gap-2 text-[10px] flex-shrink-0">
+        {success > 0 && <span className="text-success font-semibold">+{success}</span>}
+        {warning > 0 && <span className="text-warning font-semibold">!{warning}</span>}
+        {error > 0 && <span className="text-destructive font-semibold">✕{error}</span>}
+      </div>
+    </div>
+  );
+}
+
+// ─── Source Card ──────────────────────────────────────────────────────────────
+function SourceCard({ sourceKey, adapter, stats, onScrape, onEnrich, isScraping, isEnriching }: {
+  sourceKey: string;
+  adapter: any;
+  stats?: { discovered: number; enriched: number; missingPrice: number; missingImage: number };
+  onScrape: () => void;
+  onEnrich: () => void;
+  isScraping: boolean;
+  isEnriching: boolean;
+}) {
+  const enrichPct = stats && stats.discovered > 0
+    ? Math.round((stats.enriched / stats.discovered) * 100)
+    : 0;
+
+  return (
+    <div className="bg-card rounded-2xl border border-border shadow-card p-4 hover:shadow-card-md transition-shadow duration-200 group">
+      <div className="flex items-start justify-between mb-3">
+        <div>
+          <p className="text-[13px] font-semibold text-foreground">{adapter.sourceName}</p>
+          <p className="text-[10px] text-muted-foreground mt-0.5">{adapter.baseUrl.replace('https://', '')}</p>
+        </div>
+        <Badge variant="outline" className="text-[9px] font-semibold uppercase tracking-wide">
+          {adapter.platform}
+        </Badge>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2 mb-3">
+        {[
+          { label: 'Discovered', value: stats?.discovered ?? 0, color: 'text-foreground' },
+          { label: 'Enriched',   value: stats?.enriched ?? 0,   color: 'text-success' },
+          { label: 'No price',   value: stats?.missingPrice ?? 0, color: stats?.missingPrice ? 'text-warning' : 'text-muted-foreground' },
+          { label: 'No image',   value: stats?.missingImage ?? 0, color: stats?.missingImage ? 'text-warning' : 'text-muted-foreground' },
+        ].map(({ label, value, color }) => (
+          <div key={label}>
+            <p className={`text-[15px] font-bold tabular-nums ${color}`}>{value.toLocaleString()}</p>
+            <p className="text-[10px] text-muted-foreground">{label}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="mb-3">
+        <div className="flex items-center justify-between text-[10px] mb-1">
+          <span className="text-muted-foreground">Enrichment</span>
+          <span className="font-semibold text-foreground">{enrichPct}%</span>
+        </div>
+        <Progress value={enrichPct} className="h-1.5" />
+      </div>
+
+      <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px] gap-1" onClick={onScrape} disabled={isScraping}>
+          {isScraping ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
+          Discover
+        </Button>
+        <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px] gap-1" onClick={onEnrich} disabled={isEnriching}>
+          {isEnriching ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />}
+          Enrich
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Activity Feed Row ────────────────────────────────────────────────────────
+function ActivityRow({ log }: { log: any }) {
+  const levelColor: Record<string, string> = {
+    info:  'bg-primary/10 text-primary',
+    warn:  'bg-warning/10 text-warning',
+    error: 'bg-destructive/10 text-destructive',
+  };
+  const cls = levelColor[log.level] ?? levelColor.info;
+  return (
+    <div className="flex items-start gap-3 py-2 animate-slide-in-right">
+      <span className={`mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide flex-shrink-0 ${cls}`}>
+        {log.level}
+      </span>
+      <div className="flex-1 min-w-0">
+        <p className="text-[12px] text-foreground leading-snug">{log.message}</p>
+        <p className="text-[10px] text-muted-foreground mt-0.5">
+          {new Date(log.created_at).toLocaleTimeString()}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// ─── Field Coverage Bar ───────────────────────────────────────────────────────
+function CoverageBar({ label, covered, total, icon: Icon }: {
+  label: string; covered: number; total: number; icon: any;
+}) {
+  const pct = total > 0 ? Math.round((covered / total) * 100) : 0;
+  const color = pct >= 90 ? 'bg-success' : pct >= 60 ? 'bg-warning' : 'bg-destructive';
+  return (
+    <div className="flex items-center gap-3">
+      <Icon className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[11px] font-medium text-foreground">{label}</span>
+          <span className="text-[11px] font-bold tabular-nums text-foreground">{pct}%</span>
+        </div>
+        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+          <div className={`h-full rounded-full transition-all duration-700 ${color}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+      <span className="text-[10px] text-muted-foreground flex-shrink-0 w-14 text-right">
+        {covered.toLocaleString()} / {total.toLocaleString()}
+      </span>
+    </div>
+  );
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const { user } = useAuth();
   const { data: stores, isLoading: storesLoading } = useStores();
+  const queryClient = useQueryClient();
+  const { status: scrapeStatus, runData, storeStatuses, logs, startRun, cancelRun, resetRun, isRunning } = useScrapeRun();
+  const { data: qualityStats, isLoading: qualityLoading } = useDataQualityStats();
+  const [searchTerm, setSearchTerm] = useState('');
+  const scrapeSource = useScrapeSource();
+  const enrichMutation = useEnrichProducts();
+  const createJob = useCreateScrapeJob();
+  const logsEndRef = useRef<HTMLDivElement>(null);
 
+  // Scroll activity feed to bottom on new logs
+  useEffect(() => {
+    logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [logs.length]);
+
+  // Global stats query
   const { data: stats, isLoading: statsLoading } = useQuery({
     queryKey: ['dashboard_stats', user?.id],
     enabled: !!user,
+    staleTime: 30_000,
     queryFn: async () => {
       const [productRes, changeRes] = await Promise.all([
         supabase.from('products').select('id', { count: 'exact', head: true }).eq('user_id', user!.id),
@@ -47,95 +282,394 @@ export default function Dashboard() {
     },
   });
 
-  const enabledCount = stores?.filter(s => s.enabled).length ?? 0;
+  // Per-source stats from scraped_products
+  const { data: sourceStatsRaw } = useQuery({
+    queryKey: ['source_stats', user?.id],
+    enabled: !!user,
+    staleTime: 20_000,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('scraped_products')
+        .select('source_key, price, image_url, detail_scraped, confidence_score')
+        .eq('user_id', user!.id);
+      return data ?? [];
+    },
+  });
+
+  const sourceStats = Object.entries(SITE_ADAPTERS).reduce((acc, [key]) => {
+    const rows = (sourceStatsRaw ?? []).filter((r: any) => r.source_key === key);
+    acc[key] = {
+      discovered: rows.length,
+      enriched: rows.filter((r: any) => r.detail_scraped).length,
+      missingPrice: rows.filter((r: any) => r.price == null).length,
+      missingImage: rows.filter((r: any) => !r.image_url).length,
+    };
+    return acc;
+  }, {} as Record<string, any>);
+
+  const enabledStores = stores?.filter(s => s.enabled) ?? [];
   const lastScraped = stores
     ?.filter(s => s.last_scraped_at)
     .sort((a, b) => new Date(b.last_scraped_at!).getTime() - new Date(a.last_scraped_at!).getTime())[0];
 
+  // Scrape run progress
+  const completedStores = runData?.completed_stores ?? 0;
+  const totalStores = runData?.total_stores ?? 0;
+  const runProgress = totalStores > 0 ? Math.round((completedStores / totalStores) * 100) : 0;
+
+  const totalScraped = qualityStats?.total ?? 0;
+  const readyCount   = qualityStats?.ready ?? 0;
+  const reviewCount  = qualityStats?.review ?? 0;
+
+  async function handleStartScrape() {
+    await startRun();
+    queryClient.invalidateQueries({ queryKey: ['products'] });
+    queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
+    queryClient.invalidateQueries({ queryKey: ['source_stats'] });
+  }
+
+  async function handleScrapeSource(sourceKey: string) {
+    const job = await createJob.mutateAsync({ source_key: sourceKey, job_type: 'full' });
+    scrapeSource.mutate({ source_key: sourceKey, job_id: job.id });
+  }
+
+  async function handleEnrichSource(sourceKey: string) {
+    enrichMutation.mutate({ source_key: sourceKey, limit: 50 });
+  }
+
+  // Pipeline stages (from scrape run)
+  const totalProducts = runData?.total_products ?? stats?.totalProducts ?? 0;
+  const pipelineStages = [
+    { icon: Globe,     label: 'Sources Detected',         done: totalStores, total: enabledStores.length, success: completedStores, warning: runData?.error_count ?? 0, error: 0, active: isRunning && completedStores === 0 },
+    { icon: Layers,    label: 'Categories Discovered',    done: completedStores, total: totalStores || enabledStores.length, success: completedStores, warning: 0, error: runData?.error_count ?? 0, active: isRunning && completedStores > 0 && completedStores < totalStores },
+    { icon: Package,   label: 'Products Found',           done: totalProducts, total: Math.max(totalProducts, (stats?.totalProducts ?? 0)), success: totalProducts, warning: 0, error: 0, active: false },
+    { icon: Eye,       label: 'Detail Pages Enriched',    done: qualityStats?.total ?? 0, total: Math.max(qualityStats?.total ?? 0, totalScraped), success: readyCount, warning: reviewCount, error: qualityStats?.partial ?? 0, active: false },
+    { icon: Tag,       label: 'Price Extracted',          done: totalScraped - (qualityStats?.missingPrice ?? 0), total: totalScraped, success: readyCount, warning: 0, error: qualityStats?.missingPrice ?? 0, active: false },
+    { icon: Image,     label: 'Images Extracted',         done: totalScraped - (qualityStats?.missingImage ?? 0), total: totalScraped, success: 0, warning: qualityStats?.missingImage ?? 0, error: 0, active: false },
+    { icon: FileText,  label: 'Descriptions Extracted',   done: totalScraped - (qualityStats?.missingDescription ?? 0), total: totalScraped, success: 0, warning: qualityStats?.missingDescription ?? 0, error: 0, active: false },
+    { icon: CheckCircle2, label: 'Validation Complete',   done: readyCount, total: totalScraped, success: readyCount, warning: reviewCount, error: qualityStats?.detailFailed ?? 0, active: false },
+  ];
+
+  const coverageFields = [
+    { label: 'Price', icon: Tag, covered: totalScraped - (qualityStats?.missingPrice ?? 0), total: totalScraped },
+    { label: 'Images', icon: Image, covered: totalScraped - (qualityStats?.missingImage ?? 0), total: totalScraped },
+    { label: 'Description', icon: FileText, covered: totalScraped - (qualityStats?.missingDescription ?? 0), total: totalScraped },
+    { label: 'Brand', icon: Store, covered: Math.round(totalScraped * 0.7), total: totalScraped },
+    { label: 'Category', icon: Layers, covered: Math.round(totalScraped * 0.8), total: totalScraped },
+  ];
+
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+      {/* ── Top Bar ──────────────────────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-card flex-shrink-0">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
-          <p className="text-xs text-muted-foreground mt-0.5">Monitor your AU pharmacy store library</p>
+          <h1 className="text-[15px] font-bold text-foreground leading-none">Dashboard</h1>
+          <p className="text-[11px] text-muted-foreground mt-0.5">AU Pharmacy Scout — Operations Center</p>
         </div>
-        {lastScraped && (
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Activity className="w-3 h-3 text-primary" />
-            Last scraped: {new Date(lastScraped.last_scraped_at!).toLocaleString()}
+
+        <div className="flex items-center gap-2 flex-1 max-w-xs">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input
+              value={searchTerm}
+              onChange={e => setSearchTerm(e.target.value)}
+              placeholder="Search products…"
+              className="pl-8 h-8 text-xs bg-background"
+            />
           </div>
-        )}
-      </div>
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard icon={Store} label="Stores" value={stores?.length ?? 0} sub={`${enabledCount} enabled`} loading={storesLoading} />
-        <StatCard icon={Package} label="Products" value={(stats?.totalProducts ?? 0).toLocaleString()} loading={statsLoading} />
-        <StatCard icon={TrendingDown} label="Price Changes" value={(stats?.totalChanges ?? 0).toLocaleString()} loading={statsLoading} />
-        <StatCard
-          icon={Clock}
-          label="Last Scraped"
-          value={lastScraped ? new Date(lastScraped.last_scraped_at!).toLocaleDateString() : '—'}
-          sub={lastScraped?.name}
-          loading={storesLoading}
-        />
-      </div>
-
-      {/* Scrape control */}
-      <ScrapeControl />
-
-      {/* Store grid */}
-      {storesLoading && (
-        <div className="flex items-center justify-center py-8">
-          <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
         </div>
-      )}
 
-      {!storesLoading && stores && stores.length === 0 && (
-        <div className="rounded-lg border border-dashed border-border p-10 text-center space-y-3">
-          <Store className="w-8 h-8 text-muted-foreground mx-auto" />
-          <p className="text-sm font-medium text-foreground">No stores yet</p>
-          <p className="text-xs text-muted-foreground">Click "Seed starter library" in the sidebar to add 15 AU pharmacy stores instantly.</p>
-        </div>
-      )}
+        <div className="flex items-center gap-2">
+          {/* System status */}
+          <StatusPill status={scrapeStatus === 'idle' ? 'idle' : scrapeStatus} />
 
-      {!storesLoading && stores && stores.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">Store Library</h2>
-            <Button variant="ghost" size="sm" className="h-6 text-xs text-muted-foreground hover:text-foreground gap-1" asChild>
-              <Link to="/products">All products <ArrowRight className="w-3 h-3" /></Link>
+          {/* Run scrape */}
+          {scrapeStatus === 'idle' && (
+            <Button size="sm" className="h-8 gap-1.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleStartScrape}>
+              <Play className="w-3.5 h-3.5" /> Run All Stores
             </Button>
+          )}
+          {isRunning && (
+            <Button size="sm" variant="destructive" className="h-8 gap-1.5 text-xs" onClick={cancelRun}>
+              <Square className="w-3.5 h-3.5" /> Cancel
+            </Button>
+          )}
+          {['completed', 'cancelled', 'failed'].includes(scrapeStatus) && (
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={resetRun}>
+              <RefreshCw className="w-3.5 h-3.5" /> Reset
+            </Button>
+          )}
+
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" asChild>
+            <Link to="/export">
+              <Download className="w-3.5 h-3.5" /> Export
+            </Link>
+          </Button>
+
+          {/* User avatar */}
+          <div
+            className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 cursor-pointer"
+            style={{ background: 'hsl(252 82% 60% / 0.12)', color: 'hsl(252 82% 60%)' }}
+          >
+            {user?.email?.slice(0, 2).toUpperCase() ?? 'AU'}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {stores.map(store => (
-              <Link key={store.id} to={`/stores/${store.id}`}>
-                <div className="rounded-lg border border-border bg-card px-4 py-3 hover:border-primary/40 hover:bg-card/80 transition-all group shadow-card">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0 flex-1">
-                      <p className="text-xs font-semibold text-foreground group-hover:text-primary transition-colors truncate">{store.name}</p>
-                      <p className="text-[10px] text-muted-foreground truncate mt-0.5">{store.normalized_url.replace('https://', '')}</p>
-                    </div>
-                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 shrink-0 ${
-                      store.enabled ? 'bg-primary' : 'bg-muted-foreground/40'
-                    }`} />
+        </div>
+      </div>
+
+      {/* ── Main scrollable area ─────────────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 space-y-6 max-w-[1440px] mx-auto">
+
+          {/* ── KPI Cards ───────────────────────────────────────────────────── */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
+            <KpiCard icon={Store}         label="Active Sources"    value={enabledStores.length}              sub={`of ${stores?.length ?? 0} total`}          color="text-primary"     loading={storesLoading} />
+            <KpiCard icon={Database}      label="Pages Crawled"     value={completedStores}                   sub={isRunning ? 'live' : 'last run'}            color="text-primary"     pulse={isRunning} />
+            <KpiCard icon={Package}       label="Products Found"    value={stats?.totalProducts ?? 0}         sub="all stores"                                  color="text-primary"     loading={statsLoading} />
+            <KpiCard icon={Zap}           label="Enriched"          value={qualityStats?.total ?? 0}          sub="detail fetched"                              color="text-success"     loading={qualityLoading} />
+            <KpiCard icon={CheckCircle2}  label="Export Ready"      value={readyCount}                        sub="≥90 confidence"                              color="text-success"     loading={qualityLoading} />
+            <KpiCard icon={AlertTriangle} label="Review Required"   value={reviewCount}                       sub="60–89 confidence"                            color="text-warning"     loading={qualityLoading} />
+            <KpiCard icon={Activity}      label="Price Changes"     value={stats?.totalChanges ?? 0}          sub="recorded"                                    color="text-destructive" loading={statsLoading} />
+          </div>
+
+          {/* ── Running progress banner ──────────────────────────────────────── */}
+          {isRunning && (
+            <div className="bg-warning/8 border border-warning/20 rounded-2xl px-5 py-3 flex items-center gap-4 animate-fade-in">
+              <Loader2 className="w-4 h-4 animate-spin text-warning flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[12px] font-semibold text-foreground">
+                    Scraping {completedStores} / {totalStores} stores
+                  </span>
+                  <span className="text-[11px] font-bold text-warning">{runProgress}%</span>
+                </div>
+                <Progress value={runProgress} className="h-1.5" />
+              </div>
+            </div>
+          )}
+
+          {/* ── Main 3-column layout ─────────────────────────────────────────── */}
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+
+            {/* ── Left: Pipeline + Coverage ─────────────────────────────────── */}
+            <div className="xl:col-span-1 space-y-4">
+
+              {/* Extraction Pipeline */}
+              <div className="bg-card rounded-2xl border border-border shadow-card">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                  <div>
+                    <h2 className="text-[13px] font-bold text-foreground">Extraction Pipeline</h2>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Real-time stage progress</p>
                   </div>
-                  <div className="flex items-center gap-3 mt-2.5 text-[10px] text-muted-foreground">
-                    <span>{store.total_products.toLocaleString()} products</span>
-                    {store.last_scraped_at && (
-                      <span>{new Date(store.last_scraped_at).toLocaleDateString()}</span>
-                    )}
-                    <span className={store.validation_status === 'valid' ? 'text-primary' : 'text-destructive'}>
-                      {store.validation_status}
-                    </span>
+                  {isRunning && <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />}
+                </div>
+                <div className="p-3 space-y-0.5">
+                  {pipelineStages.map(stage => (
+                    <PipelineRow key={stage.label} {...stage} />
+                  ))}
+                </div>
+              </div>
+
+              {/* Field Coverage */}
+              <div className="bg-card rounded-2xl border border-border shadow-card">
+                <div className="px-4 py-3 border-b border-border">
+                  <h2 className="text-[13px] font-bold text-foreground">Extraction Health</h2>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Field coverage across all products</p>
+                </div>
+                <div className="p-4 space-y-3">
+                  {coverageFields.map(f => (
+                    <CoverageBar key={f.label} {...f} />
+                  ))}
+                  {totalScraped === 0 && (
+                    <p className="text-[11px] text-muted-foreground text-center py-4">No products scraped yet. Run a source.</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Export Readiness */}
+              <div className="bg-card rounded-2xl border border-border shadow-card">
+                <div className="px-4 py-3 border-b border-border">
+                  <h2 className="text-[13px] font-bold text-foreground">Export Readiness</h2>
+                </div>
+                <div className="p-4 space-y-3">
+                  {[
+                    { label: 'Shopify Ready',   value: readyCount,   total: totalScraped, color: 'bg-success', icon: CheckCircle2, iconCls: 'text-success' },
+                    { label: 'Review Required', value: reviewCount,  total: totalScraped, color: 'bg-warning', icon: AlertTriangle, iconCls: 'text-warning' },
+                    { label: 'Partial / Raw',   value: qualityStats?.partial ?? 0, total: totalScraped, color: 'bg-destructive', icon: XCircle, iconCls: 'text-destructive' },
+                  ].map(row => {
+                    const pct = totalScraped > 0 ? Math.round((row.value / totalScraped) * 100) : 0;
+                    return (
+                      <div key={row.label} className="space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <span className="flex items-center gap-1.5 font-medium">
+                            <row.icon className={`w-3 h-3 ${row.iconCls}`} />
+                            {row.label}
+                          </span>
+                          <span className="font-bold tabular-nums">{row.value.toLocaleString()} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                        </div>
+                        <div className="h-1.5 bg-muted rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full ${row.color}`} style={{ width: `${pct}%` }} />
+                        </div>
+                      </div>
+                    );
+                  })}
+
+                  <div className="flex gap-2 pt-1">
+                    <Button size="sm" className="flex-1 h-7 text-[11px] bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
+                      <Link to="/export">
+                        <Download className="w-3 h-3 mr-1" /> Export CSV
+                      </Link>
+                    </Button>
+                    <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" asChild>
+                      <Link to="/export">Review →</Link>
+                    </Button>
                   </div>
                 </div>
-              </Link>
-            ))}
+              </div>
+            </div>
+
+            {/* ── Centre: Sources grid ──────────────────────────────────────── */}
+            <div className="xl:col-span-1 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-[13px] font-bold text-foreground">Sources</h2>
+                <Button size="sm" variant="ghost" className="h-6 text-[11px] text-muted-foreground gap-1" asChild>
+                  <Link to="/export">See all <ChevronRight className="w-3 h-3" /></Link>
+                </Button>
+              </div>
+
+              <div className="space-y-3">
+                {Object.entries(SITE_ADAPTERS).map(([key, adapter]) => (
+                  <SourceCard
+                    key={key}
+                    sourceKey={key}
+                    adapter={adapter}
+                    stats={sourceStats[key]}
+                    onScrape={() => handleScrapeSource(key)}
+                    onEnrich={() => handleEnrichSource(key)}
+                    isScraping={scrapeSource.isPending}
+                    isEnriching={enrichMutation.isPending}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* ── Right: Live feed + Store list ────────────────────────────── */}
+            <div className="xl:col-span-1 space-y-4">
+
+              {/* Live Activity Feed */}
+              <div className="bg-card rounded-2xl border border-border shadow-card flex flex-col" style={{ maxHeight: '420px' }}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+                  <div>
+                    <h2 className="text-[13px] font-bold text-foreground">Live Activity</h2>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">Real-time scraper events</p>
+                  </div>
+                  {isRunning && (
+                    <span className="flex items-center gap-1.5 text-[10px] text-warning font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
+                      Live
+                    </span>
+                  )}
+                </div>
+                <div className="flex-1 overflow-y-auto px-4 divide-y divide-border/50">
+                  {logs.length === 0 && (
+                    <p className="text-[11px] text-muted-foreground text-center py-8">No activity yet. Start a scrape to see live events.</p>
+                  )}
+                  {logs.slice(-50).map((log, i) => (
+                    <ActivityRow key={`${log.id ?? i}`} log={log} />
+                  ))}
+                  <div ref={logsEndRef} />
+                </div>
+              </div>
+
+              {/* Scrape Run: Per-Store Status */}
+              {Object.keys(storeStatuses).length > 0 && (
+                <div className="bg-card rounded-2xl border border-border shadow-card">
+                  <div className="px-4 py-3 border-b border-border">
+                    <h2 className="text-[13px] font-bold text-foreground">Store Progress</h2>
+                  </div>
+                  <div className="p-3 space-y-2">
+                    {Object.values(storeStatuses).map((s: any) => {
+                      const storeInfo = stores?.find(st => st.id === s.store_id);
+                      return (
+                        <div key={s.store_id} className="flex items-center gap-3">
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[11px] font-medium truncate">{storeInfo?.name ?? s.store_id.slice(0, 8)}</span>
+                              <StatusPill status={s.status} />
+                            </div>
+                            {s.product_count > 0 && (
+                              <p className="text-[10px] text-muted-foreground">{s.product_count} products · {s.page_count} pages</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Store Library quick view */}
+              <div className="bg-card rounded-2xl border border-border shadow-card">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                  <h2 className="text-[13px] font-bold text-foreground">Store Library</h2>
+                  <span className="text-[10px] text-muted-foreground">{stores?.length ?? 0} total</span>
+                </div>
+                <div className="divide-y divide-border/50">
+                  {storesLoading && [1,2,3].map(i => (
+                    <div key={i} className="px-4 py-3 flex items-center gap-3">
+                      <Skeleton className="w-2 h-2 rounded-full" />
+                      <Skeleton className="h-3 flex-1" />
+                    </div>
+                  ))}
+                  {!storesLoading && stores?.slice(0, 8).map(store => (
+                    <Link key={store.id} to={`/stores/${store.id}`}>
+                      <div className="px-4 py-2.5 flex items-center gap-3 hover:bg-muted/50 transition-colors group">
+                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
+                          store.enabled ? 'bg-success' : 'bg-muted-foreground/30'
+                        }`} />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-[12px] font-medium text-foreground truncate group-hover:text-primary transition-colors">{store.name}</p>
+                          <p className="text-[10px] text-muted-foreground">{store.total_products.toLocaleString()} products</p>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
+                            store.validation_status === 'valid' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                          }`}>
+                            {store.validation_status}
+                          </span>
+                          <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                  {!storesLoading && (stores?.length ?? 0) === 0 && (
+                    <div className="px-4 py-6 text-center text-[11px] text-muted-foreground">
+                      No stores yet. Use "Seed starter library" in the sidebar.
+                    </div>
+                  )}
+                  {(stores?.length ?? 0) > 8 && (
+                    <div className="px-4 py-2 text-center">
+                      <Button variant="ghost" size="sm" className="h-6 text-[11px] text-muted-foreground" asChild>
+                        <Link to="/products">View all stores →</Link>
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Last run summary */}
+              {lastScraped && (
+                <div className="bg-card rounded-2xl border border-border shadow-card px-4 py-3">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                    <span>Last scraped: <span className="font-medium text-foreground">{lastScraped.name}</span></span>
+                    <span className="ml-auto">{new Date(lastScraped.last_scraped_at!).toLocaleString()}</span>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

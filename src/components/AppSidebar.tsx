@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { NavLink as RouterNavLink, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard, Store, TrendingDown, Download, Settings, Plus,
-  Loader2, ToggleLeft, ToggleRight, Trash2, Pill,
-  ChevronDown, ChevronUp, LogOut, Lock, ShieldAlert,
+  LayoutDashboard, Database, Briefcase, Package, Download,
+  Activity, Settings, Plus, Loader2, ToggleLeft, ToggleRight,
+  Trash2, Pill, ChevronDown, ChevronUp, LogOut, Lock, ShieldAlert,
+  Store,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,7 +13,6 @@ import { useStores, useUpdateStore, useDeleteStore, useSeedStores } from '@/hook
 import { useAuth } from '@/hooks/useAuth';
 import { AddStoreModal } from './AddStoreModal';
 import { StoreCredentialsModal } from './StoreCredentialsModal';
-import { StoreStrategyBadge } from './StoreStrategyBadge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -20,16 +20,51 @@ import {
 } from '@/components/ui/alert-dialog';
 import type { Store as StoreType } from '@/types/schemas';
 
-const NAV_ITEMS = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
-  { to: '/products', icon: Store, label: 'All Products', end: false },
-  { to: '/price-changes', icon: TrendingDown, label: 'Price Changes', end: false },
-  { to: '/export', icon: Download, label: 'Export', end: false },
-  { to: '/settings', icon: Settings, label: 'Settings', end: false },
+const NAV_SECTIONS = [
+  {
+    label: 'Overview',
+    items: [
+      { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+      { to: '/products', icon: Package, label: 'Products', end: false },
+      { to: '/price-changes', icon: Activity, label: 'Price Changes', end: false },
+    ],
+  },
+  {
+    label: 'Data Ops',
+    items: [
+      { to: '/export', icon: Download, label: 'Exports', end: false },
+    ],
+  },
+  {
+    label: 'System',
+    items: [
+      { to: '/settings', icon: Settings, label: 'Settings', end: false },
+    ],
+  },
 ];
 
-export function AppSidebar() {
+function NavItem({ to, icon: Icon, label, end }: { to: string; icon: any; label: string; end: boolean }) {
   const location = useLocation();
+  const active = end ? location.pathname === to : location.pathname.startsWith(to);
+
+  return (
+    <RouterNavLink to={to}>
+      <div className={`flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150 ${
+        active
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
+      }`}>
+        <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-sidebar-primary' : ''}`} />
+        <span>{label}</span>
+        {active && (
+          <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary" />
+        )}
+      </div>
+    </RouterNavLink>
+  );
+}
+
+export function AppSidebar() {
   const { data: stores, isLoading } = useStores();
   const updateStore = useUpdateStore();
   const deleteStore = useDeleteStore();
@@ -43,180 +78,200 @@ export function AppSidebar() {
     if (!store.requires_auth) return '';
     const cookieExpiry = store.auth_cookie_expires_at ? new Date(store.auth_cookie_expires_at) : null;
     const isExpired = cookieExpiry ? cookieExpiry < new Date() : false;
-    if (store.auth_status === 'authenticated' && !isExpired) return 'text-green-500';
+    if (store.auth_status === 'authenticated' && !isExpired) return 'text-success';
     if (isExpired || store.auth_status === 'failed') return 'text-destructive';
-    return 'text-muted-foreground';
+    return 'text-sidebar-muted';
   };
 
+  const userInitials = user?.email?.slice(0, 2).toUpperCase() ?? 'AU';
+
   return (
-    <div className="flex flex-col h-full w-60 bg-sidebar border-r border-sidebar-border shrink-0">
-      {/* Logo */}
-      <div className="flex items-center gap-2.5 px-4 py-3.5 border-b border-sidebar-border">
-        <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center shadow-glow shrink-0">
-          <Pill className="w-3.5 h-3.5 text-primary" />
+    <div
+      className="flex flex-col h-full w-[220px] shrink-0"
+      style={{ background: 'hsl(var(--sidebar-background))' }}
+    >
+      {/* ── Logo ─────────────────────────────────────────────────── */}
+      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
+        <div
+          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
+          style={{ background: 'hsl(252 82% 65% / 0.18)' }}
+        >
+          <Pill className="w-4 h-4" style={{ color: 'hsl(252 82% 70%)' }} />
         </div>
         <div className="min-w-0">
-          <p className="text-xs font-bold text-foreground leading-none tracking-wide">AU Pharmacy Scout</p>
-          <p className="text-[10px] text-muted-foreground leading-none mt-0.5 truncate">{user?.email}</p>
+          <p className="text-[13px] font-bold leading-none" style={{ color: 'hsl(var(--sidebar-accent-foreground))' }}>
+            Pharmacy Scout
+          </p>
+          <p className="text-[10px] mt-0.5 truncate text-sidebar-muted">AU Data Platform</p>
         </div>
       </div>
 
-      {/* Nav */}
-      <nav className="px-2 py-2.5 space-y-px">
-        {NAV_ITEMS.map(({ to, icon: Icon, label, end }) => {
-          const active = end ? location.pathname === to : location.pathname.startsWith(to);
-          return (
-            <RouterNavLink key={to} to={to}>
-              <div className={`flex items-center gap-2.5 px-3 py-2 rounded-md text-xs transition-all ${
-                active
-                  ? 'bg-primary/15 text-primary font-semibold shadow-glow'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
-              }`}>
-                <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                {label}
-              </div>
-            </RouterNavLink>
-          );
-        })}
+      {/* ── Navigation ───────────────────────────────────────────── */}
+      <nav className="px-3 py-3 space-y-4 flex-shrink-0">
+        {NAV_SECTIONS.map(section => (
+          <div key={section.label}>
+            <p className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1 text-sidebar-muted">
+              {section.label}
+            </p>
+            <div className="space-y-0.5">
+              {section.items.map(item => (
+                <NavItem key={item.to} {...item} />
+              ))}
+            </div>
+          </div>
+        ))}
       </nav>
 
-      {/* Stores section */}
-      <div className="px-3 pt-2 pb-1 border-t border-sidebar-border mt-1">
+      {/* ── Store Library ─────────────────────────────────────────── */}
+      <div className="flex-shrink-0 px-3 pt-2 border-t border-sidebar-border">
         <button
           onClick={() => setStoresExpanded(v => !v)}
-          className="flex items-center justify-between w-full text-[10px] font-bold uppercase tracking-widest text-muted-foreground hover:text-foreground transition-colors py-1"
+          className="flex items-center justify-between w-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors rounded-md hover:bg-sidebar-accent/40"
+          style={{ color: 'hsl(var(--sidebar-muted))' }}
         >
-          <span>Stores{stores?.length ? ` (${stores.length})` : ''}</span>
+          <div className="flex items-center gap-1.5">
+            <Store className="w-3 h-3" />
+            <span>Stores {stores?.length ? `(${stores.length})` : ''}</span>
+          </div>
           {storesExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
         </button>
       </div>
 
       {storesExpanded && (
-        <ScrollArea className="flex-1 px-2">
+        <ScrollArea className="flex-1 px-3 pb-1">
           {isLoading && (
-            <div className="flex items-center justify-center py-3">
-              <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'hsl(var(--sidebar-muted))' }} />
             </div>
           )}
           {!isLoading && (!stores || stores.length === 0) && (
-            <p className="text-[11px] text-muted-foreground px-3 py-2">No stores yet — seed or add one.</p>
+            <p className="text-[11px] px-3 py-2 text-sidebar-muted">No stores yet.</p>
           )}
-          {stores?.map(store => (
-            <div key={store.id} className="group flex items-center gap-1 px-2 py-1.5 rounded-md hover:bg-sidebar-accent transition-colors">
-              <RouterNavLink to={`/stores/${store.id}`} className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-                    store.enabled
-                      ? (store.validation_status === 'valid' || store.validation_status === 'restricted') ? 'bg-primary' : 'bg-destructive'
-                      : 'bg-muted-foreground/40'
-                  }`} />
-                  <span className="text-[11px] text-sidebar-foreground truncate hover:text-sidebar-accent-foreground transition-colors">
-                    {store.name}
-                  </span>
-                  {/* Auth badge */}
-                  {store.requires_auth && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <button
-                          onClick={e => { e.preventDefault(); e.stopPropagation(); setCredStore(store); }}
-                          className={`shrink-0 ${getAuthBadgeColor(store)}`}
-                        >
-                          {store.auth_type === 'customer_account'
-                            ? <ShieldAlert className="w-3 h-3" />
-                            : <Lock className="w-3 h-3" />}
-                        </button>
-                      </TooltipTrigger>
-                      <TooltipContent side="right" className="text-xs">
-                        {store.auth_status === 'authenticated' ? 'Authenticated — click to update' : 'Needs credentials — click to add'}
-                      </TooltipContent>
-                    </Tooltip>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 ml-3 mt-0.5">
-                  {store.total_products > 0 && (
-                    <p className="text-[10px] text-muted-foreground">{store.total_products.toLocaleString()}</p>
-                  )}
-                  <StoreStrategyBadge store={store} />
-                </div>
-              </RouterNavLink>
-
-              {/* Actions (show on hover) */}
-              <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      onClick={() => updateStore.mutate({ id: store.id, enabled: !store.enabled })}
-                      className="p-0.5 text-muted-foreground hover:text-foreground transition-colors"
+          <div className="space-y-0.5 py-1">
+            {stores?.map(store => (
+              <div key={store.id} className="group flex items-center gap-1 px-2 py-1.5 rounded-lg hover:bg-sidebar-accent/60 transition-colors">
+                <RouterNavLink to={`/stores/${store.id}`} className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                      store.enabled
+                        ? (store.validation_status === 'valid' || store.validation_status === 'restricted')
+                          ? 'bg-success'
+                          : 'bg-destructive'
+                        : 'bg-sidebar-muted opacity-40'
+                    }`} />
+                    <span
+                      className="text-[12px] truncate leading-none"
+                      style={{ color: 'hsl(var(--sidebar-foreground))' }}
                     >
-                      {store.enabled
-                        ? <ToggleRight className="w-3.5 h-3.5 text-primary" />
-                        : <ToggleLeft className="w-3.5 h-3.5" />}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="right" className="text-xs">{store.enabled ? 'Disable' : 'Enable'}</TooltipContent>
-                </Tooltip>
+                      {store.name}
+                    </span>
+                    {store.requires_auth && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={e => { e.preventDefault(); e.stopPropagation(); setCredStore(store); }}
+                            className={`shrink-0 ${getAuthBadgeColor(store)}`}
+                          >
+                            {store.auth_type === 'customer_account'
+                              ? <ShieldAlert className="w-3 h-3" />
+                              : <Lock className="w-3 h-3" />}
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right" className="text-xs">
+                          {store.auth_status === 'authenticated' ? 'Authenticated — click to update' : 'Needs credentials — click to add'}
+                        </TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                  {store.total_products > 0 && (
+                    <p className="text-[10px] ml-3.5 mt-0.5 text-sidebar-muted">
+                      {store.total_products.toLocaleString()} products
+                    </p>
+                  )}
+                </RouterNavLink>
 
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <button className="p-0.5 text-muted-foreground hover:text-destructive transition-colors">
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete {store.name}?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This permanently deletes this store and all its products, variants, and price history.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteStore.mutate(store.id)}
-                        className="bg-destructive hover:bg-destructive/90"
+                {/* Hover actions */}
+                <div className="hidden group-hover:flex items-center gap-0.5 shrink-0">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        onClick={() => updateStore.mutate({ id: store.id, enabled: !store.enabled })}
+                        className="p-0.5 transition-colors text-sidebar-muted hover:text-sidebar-accent-foreground"
                       >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
+                        {store.enabled
+                          ? <ToggleRight className="w-3.5 h-3.5" style={{ color: 'hsl(252 82% 65%)' }} />
+                          : <ToggleLeft className="w-3.5 h-3.5" />}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right" className="text-xs">{store.enabled ? 'Disable' : 'Enable'}</TooltipContent>
+                  </Tooltip>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <button className="p-0.5 text-sidebar-muted hover:text-destructive transition-colors">
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Delete {store.name}?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This permanently deletes this store and all its products, variants, and price history.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => deleteStore.mutate(store.id)} className="bg-destructive hover:bg-destructive/90">
+                          Delete
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </div>
               </div>
-            </div>
-          ))}
+            ))}
+          </div>
           <div className="h-2" />
         </ScrollArea>
       )}
 
-      {/* Footer */}
-      <div className="px-2 pb-3 pt-2 border-t border-sidebar-border space-y-1">
+      {/* ── Footer actions ────────────────────────────────────────── */}
+      <div className="px-3 py-3 border-t border-sidebar-border space-y-1 flex-shrink-0">
         <Button
-          variant="outline"
+          variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 text-xs border-dashed border-sidebar-border hover:border-primary/50 hover:text-primary hover:bg-primary/5 h-7"
+          className="w-full justify-start gap-2 text-[12px] font-medium h-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
           onClick={() => setAddOpen(true)}
         >
-          <Plus className="w-3 h-3" /> Add Store
+          <Plus className="w-3.5 h-3.5" /> Add Store
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 text-xs text-muted-foreground hover:text-foreground h-7"
+          className="w-full justify-start gap-2 text-[12px] h-8 text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
           onClick={() => seedStores.mutate()}
           disabled={seedStores.isPending}
         >
-          {seedStores.isPending
-            ? <Loader2 className="w-3 h-3 animate-spin" />
-            : <Store className="w-3 h-3" />}
+          {seedStores.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
           Seed starter library
         </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full justify-start gap-2 text-xs text-muted-foreground hover:text-foreground h-7"
-          onClick={signOut}
-        >
-          <LogOut className="w-3 h-3" /> Sign Out
-        </Button>
+
+        {/* User row */}
+        <div className="flex items-center gap-2 px-1 pt-2 border-t border-sidebar-border mt-1">
+          <div
+            className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
+            style={{ background: 'hsl(252 82% 65% / 0.2)', color: 'hsl(252 82% 70%)' }}
+          >
+            {userInitials}
+          </div>
+          <p className="text-[11px] text-sidebar-muted truncate flex-1">{user?.email}</p>
+          <button
+            onClick={signOut}
+            className="p-1 rounded text-sidebar-muted hover:text-destructive transition-colors"
+            title="Sign out"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
 
       <AddStoreModal open={addOpen} onOpenChange={setAddOpen} />
