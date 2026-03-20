@@ -329,7 +329,7 @@ function Part1({ rows }: { rows: StoreAuditRow[] }) {
                   <TableCell className="text-right text-xs tabular-nums">
                     {row.categories === 0 ? <span className="text-muted-foreground text-[10px] italic">none</span> : row.categories}
                   </TableCell>
-                  <TableCell className="text-right text-xs tabular-nums text-emerald-700">{row.ready}</TableCell>
+                  <TableCell className="text-right text-xs tabular-nums text-success">{row.ready}</TableCell>
                   <TableCell className="text-right text-xs tabular-nums">
                     {row.stuck_disc > 0 ? <span className="text-destructive font-semibold">{row.stuck_disc}</span> : <span className="text-muted-foreground">0</span>}
                   </TableCell>
@@ -339,7 +339,7 @@ function Part1({ rows }: { rows: StoreAuditRow[] }) {
                   <TableCell className="text-right text-xs tabular-nums">
                     {row.events > 0
                       ? <span>{row.events}{row.err_events > 0 && <span className="text-destructive ml-1">({row.err_events} err)</span>}</span>
-                      : <span className="text-xs text-amber-600 italic">0 ⚠</span>}
+                      : <span className="text-xs text-warning italic">0 ⚠</span>}
                   </TableCell>
                   <TableCell>
                     {row.last_scraped_at
