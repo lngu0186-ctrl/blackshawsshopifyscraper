@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -7,7 +7,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import {
   Play, Square, RefreshCw, ChevronDown, ChevronUp,
   AlertCircle, CheckCircle2, Clock, Loader2,
-  SkipForward, AlertTriangle, Timer, Zap,
+  SkipForward, AlertTriangle, Zap,
 } from 'lucide-react';
 import { useScrapeRun } from '@/hooks/useScrapeRun';
 import { useStores } from '@/hooks/useStores';
@@ -16,7 +16,7 @@ import { cn } from '@/lib/utils';
 
 const STATUS_COLORS: Record<string, string> = {
   queued:    'bg-muted-foreground/20 text-muted-foreground',
-  fetching:  'bg-yellow-500/20 text-yellow-500',
+  fetching:  'bg-warning/20 text-warning',
   completed: 'bg-primary/20 text-primary',
   error:     'bg-destructive/20 text-destructive',
   cancelled: 'bg-muted-foreground/20 text-muted-foreground',
@@ -30,25 +30,24 @@ const STATUS_ICONS: Record<string, React.ReactNode> = {
 };
 const LOG_COLORS: Record<string, string> = {
   info:         'text-muted-foreground',
-  warn:         'text-yellow-500',
+  warn:         'text-warning',
   error:        'text-destructive',
   price_change: 'text-primary font-medium',
 };
 
-// Stall banner
-function StallBanner({ level, onSkip, onCancel }: { level: 'warn' | 'critical'; onSkip: () => void; onCancel: () => void }) {
+function StallBanner({
+  level, onSkip, onCancel,
+}: { level: 'warn' | 'critical'; onSkip: () => void; onCancel: () => void }) {
   const isCrit = level === 'critical';
   return (
     <div className={cn(
       'flex items-center gap-3 px-4 py-2 rounded-lg text-[12px] font-medium border',
-      isCrit
-        ? 'bg-destructive/10 text-destructive border-destructive/30'
-        : 'bg-warning/10 text-warning border-warning/30',
+      isCrit ? 'bg-destructive/10 text-destructive border-destructive/30' : 'bg-warning/10 text-warning border-warning/30',
     )}>
       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
       <span className="flex-1">
         {isCrit
-          ? 'No activity for 90 seconds — scraper may be stalled. Consider skipping the current collection or cancelling the run.'
+          ? 'No activity for 90 seconds — scraper may be stalled.'
           : 'No activity for 45 seconds — scraper may be stuck.'}
       </span>
       <button onClick={onSkip} className="underline hover:no-underline whitespace-nowrap">Skip collection</button>
@@ -58,16 +57,20 @@ function StallBanner({ level, onSkip, onCancel }: { level: 'warn' | 'critical'; 
 }
 
 export function ScrapeControl() {
-  const { runData, status, storeStatuses, logs, stallLevel, startRun, cancelRun, skipCurrentCollection, resetRun, isRunning } = useScrapeRun();
+  const {
+    runData, status, storeStatuses, logs, stallLevel,
+    startRun, cancelRun, skipCurrentCollection, resetRun, isRunning,
+  } = useScrapeRun();
   const { data: stores } = useStores();
   const [logsOpen, setLogsOpen] = useState(false);
   const queryClient = useQueryClient();
+
   const enabledStores = stores?.filter(s => s.enabled) ?? [];
 
-  // Find currently-fetching store for status bar
-  const activeStoreEntry = Object.entries(storeStatuses).find(([, s]) => s.status === 'fetching');
-  const activeStoreId = activeStoreEntry?.[0];
-  const activeStoreRecord = activeStoreEntry?.[1] as any;
+  // Find currently-fetching store entry for status bar
+  const activeEntry = Object.entries(storeStatuses).find(([, s]) => s.status === 'fetching');
+  const activeStoreId = activeEntry?.[0];
+  const activeStoreRecord = activeEntry?.[1] as any;
   const activeStoreName = stores?.find(s => s.id === activeStoreId)?.name;
 
   const progress = runData
@@ -86,7 +89,9 @@ export function ScrapeControl() {
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h2 className="text-base font-semibold text-foreground">Scrape Control</h2>
-          <p className="text-xs text-muted-foreground mt-0.5">{enabledStores.length} store{enabledStores.length !== 1 ? 's' : ''} enabled · sequential mode</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {enabledStores.length} store{enabledStores.length !== 1 ? 's' : ''} enabled · sequential mode
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {(status === 'completed' || status === 'cancelled' || status === 'failed') && (
@@ -96,7 +101,11 @@ export function ScrapeControl() {
           )}
           {isRunning && (
             <>
-              <Button variant="outline" size="sm" onClick={skipCurrentCollection} className="text-warning border-warning/40 hover:bg-warning/10">
+              <Button
+                variant="outline" size="sm"
+                onClick={skipCurrentCollection}
+                className="text-warning border-warning/40 hover:bg-warning/10"
+              >
                 <SkipForward className="w-3.5 h-3.5 mr-1.5" />Skip Collection
               </Button>
               <Button variant="destructive" size="sm" onClick={cancelRun}>
@@ -104,6 +113,62 @@ export function ScrapeControl() {
               </Button>
             </>
           )}
+          {!isRunning && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-glow font-medium"
+                  onClick={handleStart}
+                  disabled={status === 'running' || enabledStores.length === 0}
+                >
+                  <Play className="w-3.5 h-3.5 mr-1.5" />
+                  Scrape All Enabled Stores
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent className="max-w-xs text-xs">
+                Runs stores one at a time with 4-strategy fallback per collection. Uses public Shopify JSON endpoints.
+              </TooltipContent>
+            </Tooltip>
+          )}
+        </div>
+      </div>
+
+      {/* Stall banner */}
+      {isRunning && stallLevel !== 'none' && (
+        <StallBanner level={stallLevel} onSkip={skipCurrentCollection} onCancel={cancelRun} />
+      )}
+
+      {/* Active run status bar */}
+      {isRunning && activeStoreRecord && (
+        <div className="bg-muted/40 rounded-lg border border-border px-3 py-2 text-[11px] space-y-1">
+          <div className="flex items-center gap-2 text-foreground font-medium">
+            <Zap className="w-3 h-3 text-primary" />
+            <span>{activeStoreName ?? 'Unknown store'}</span>
+            {activeStoreRecord.current_collection && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1.5 font-mono">
+                {activeStoreRecord.current_collection}
+              </Badge>
+            )}
+            {activeStoreRecord.current_strategy && (
+              <Badge variant="outline" className="text-[9px] h-4 px-1.5 text-muted-foreground">
+                {activeStoreRecord.current_strategy}
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-4 text-muted-foreground">
+            {activeStoreRecord.collections_total > 0 && (
+              <span>
+                Collections: {activeStoreRecord.collections_completed ?? 0}/{activeStoreRecord.collections_total ?? 0}
+                {activeStoreRecord.collections_skipped > 0 && (
+                  <span className="text-warning ml-1">({activeStoreRecord.collections_skipped} skipped)</span>
+                )}
+              </span>
+            )}
+            <span>Products saved: {(runData?.total_products ?? 0).toLocaleString()}</span>
+          </div>
+        </div>
+      )}
 
       {runData && (
         <>
@@ -111,7 +176,9 @@ export function ScrapeControl() {
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>{runData.completed_stores}/{runData.total_stores} stores</span>
-              <span>{runData.total_products.toLocaleString()} products · {runData.total_price_changes} changes · {runData.error_count} errors</span>
+              <span>
+                {runData.total_products.toLocaleString()} products · {runData.total_price_changes} changes · {runData.error_count} errors
+              </span>
             </div>
             <Progress value={progress} className="h-1.5" />
           </div>
@@ -122,7 +189,14 @@ export function ScrapeControl() {
               const store = stores?.find(st => st.id === storeId);
               const rs = s as any;
               return (
-                <div key={storeId} className={cn('flex items-start gap-2 p-2.5 rounded-md border text-xs', STATUS_COLORS[s.status] || STATUS_COLORS.queued, 'border-current/20 bg-current/5')}>
+                <div
+                  key={storeId}
+                  className={cn(
+                    'flex items-start gap-2 p-2.5 rounded-md border text-xs',
+                    STATUS_COLORS[s.status] || STATUS_COLORS.queued,
+                    'border-current/20 bg-current/5',
+                  )}
+                >
                   <span className="mt-0.5 flex-shrink-0">{STATUS_ICONS[s.status]}</span>
                   <div className="min-w-0 flex-1">
                     <p className="font-medium truncate">{store?.name ?? storeId.slice(0, 8)}</p>
@@ -130,7 +204,9 @@ export function ScrapeControl() {
                       {rs.terminal_status ? rs.terminal_status : (s.message || s.status)}
                     </p>
                     {s.status === 'fetching' && rs.current_collection && (
-                      <p className="opacity-60 truncate text-[9px] font-mono mt-0.5">{rs.current_collection} · {rs.current_strategy}</p>
+                      <p className="opacity-60 truncate text-[9px] font-mono mt-0.5">
+                        {rs.current_collection} · {rs.current_strategy}
+                      </p>
                     )}
                   </div>
                 </div>
