@@ -1,12 +1,6 @@
 import { supabase } from './supabase';
 import type { Settings } from '@/types/schemas';
 
-export interface ScrapeJobState {
-  runId: string;
-  storeStatuses: Record<string, string>;
-  cancelled: boolean;
-}
-
 const DEFAULT_SETTINGS: Settings = {
   interPageDelay: 500,
   maxConcurrentStores: 3,
@@ -31,7 +25,6 @@ export function saveSettings(s: Partial<Settings>) {
 export async function startScrapeRun(userId: string): Promise<{ runId: string; storeIds: string[] } | null> {
   const settings = getSettings();
 
-  // Get enabled stores
   const { data: stores, error } = await supabase
     .from('stores')
     .select('id')
@@ -40,7 +33,6 @@ export async function startScrapeRun(userId: string): Promise<{ runId: string; s
 
   if (error || !stores || stores.length === 0) return null;
 
-  // Create scrape run
   const { data: run, error: runErr } = await supabase
     .from('scrape_runs')
     .insert({
@@ -48,24 +40,23 @@ export async function startScrapeRun(userId: string): Promise<{ runId: string; s
       status: 'running',
       started_at: new Date().toISOString(),
       total_stores: stores.length,
-      settings,
+      settings: settings as any,
     })
     .select('id')
     .single();
 
   if (runErr || !run) return null;
 
-  // Create scrape_run_stores rows
-  const runStoreRows = stores.map((s) => ({
-    scrape_run_id: run.id,
+  const runStoreRows = (stores as Array<{ id: string }>).map((s) => ({
+    scrape_run_id: run.id as string,
     user_id: userId,
     store_id: s.id,
     status: 'queued',
   }));
 
-  await supabase.from('scrape_run_stores').insert(runStoreRows);
+  await supabase.from('scrape_run_stores').insert(runStoreRows as any);
 
-  return { runId: run.id, storeIds: stores.map((s) => s.id) };
+  return { runId: run.id as string, storeIds: (stores as Array<{ id: string }>).map((s) => s.id) };
 }
 
 export async function scrapeStore(
@@ -76,7 +67,7 @@ export async function scrapeStore(
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   const response = await fetch(`${supabaseUrl}/functions/v1/scrape-store`, {
     method: 'POST',
     headers: {
@@ -101,7 +92,7 @@ export async function cancelScrapeRun(runId: string): Promise<void> {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) throw new Error('Not authenticated');
 
-  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
   await fetch(`${supabaseUrl}/functions/v1/cancel-scrape`, {
     method: 'POST',
     headers: {
@@ -122,7 +113,7 @@ export async function runConcurrentScrape(
 ): Promise<void> {
   const queue = [...storeIds];
   const maxConcurrent = Math.min(settings.maxConcurrentStores, 5);
-  const running: Promise<void>[] = [];
+  const workers: Promise<void>[] = [];
 
   async function processNext(): Promise<void> {
     while (queue.length > 0) {
@@ -139,19 +130,20 @@ export async function runConcurrentScrape(
   }
 
   for (let i = 0; i < maxConcurrent; i++) {
-    running.push(processNext());
+    workers.push(processNext());
   }
 
-  await Promise.all(running);
+  await Promise.all(workers);
 
   if (!isCancelled?.()) {
-    // Check if all stores completed/errored, then mark run completed
     const { data: runStores } = await supabase
       .from('scrape_run_stores')
       .select('status')
       .eq('scrape_run_id', runId);
 
-    const allDone = runStores?.every(s => ['completed', 'error', 'cancelled'].includes(s.status));
+    const allDone = (runStores as Array<{ status: string }> | null)?.every(
+      s => ['completed', 'error', 'cancelled'].includes(s.status)
+    );
     if (allDone) {
       await supabase
         .from('scrape_runs')
