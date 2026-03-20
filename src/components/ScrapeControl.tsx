@@ -99,14 +99,11 @@ export function ScrapeControl() {
               <Button variant="outline" size="sm" onClick={skipCurrentCollection} className="text-warning border-warning/40 hover:bg-warning/10">
                 <SkipForward className="w-3.5 h-3.5 mr-1.5" />Skip Collection
               </Button>
-...
-                {activeStoreRecord.collections_skipped > 0 && <span className="text-warning ml-1">({activeStoreRecord.collections_skipped} skipped)</span>}
-              </span>
-            )}
-            <span>Products saved: {(runData?.total_products ?? 0).toLocaleString()}</span>
-          </div>
-        </div>
-      )}
+              <Button variant="destructive" size="sm" onClick={cancelRun}>
+                <Square className="w-3.5 h-3.5 mr-1.5" />Cancel
+              </Button>
+            </>
+          )}
 
       {runData && (
         <>
