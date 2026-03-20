@@ -385,8 +385,8 @@ export function AddStoreModal({ open, onOpenChange }: Props) {
             </p>
 
             {authResult && (
-              <Alert variant={authResult.success ? 'default' : 'destructive'} className={authResult.success ? 'border-green-500/30 bg-green-500/5' : ''}>
-                {authResult.success ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4" />}
+              <Alert variant={authResult.success ? 'default' : 'destructive'} className={authResult.success ? 'border-success/30 bg-success/5' : ''}>
+                {authResult.success ? <CheckCircle className="h-4 w-4 text-success" /> : <XCircle className="h-4 w-4" />}
                 <AlertDescription>{authResult.message}</AlertDescription>
               </Alert>
             )}
