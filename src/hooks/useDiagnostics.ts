@@ -175,7 +175,7 @@ export function useWriteDiagnostic() {
     mutationFn: async (diag: Omit<ScrapeDiagnostic, 'id' | 'user_id' | 'created_at'>) => {
       const { data, error } = await supabase
         .from('scrape_diagnostics')
-        .insert({ ...diag, user_id: user!.id })
+        .insert([{ ...diag, user_id: user!.id }] as any)
         .select()
         .single();
       if (error) throw error;
