@@ -1231,9 +1231,9 @@ export default function ScrapingAudit() {
             <TabsContent value="part3">
               <div className="mb-3">
                 <h2 className="text-sm font-semibold">Part 3 — Pagination Audit</h2>
-                <p className="text-xs text-muted-foreground">Pagination depth is not currently tracked. This section shows what can be inferred from product counts.</p>
+                <p className="text-xs text-muted-foreground">{hasPageTracking ? `${totalPagesTracked} pages tracked across recent runs.` : 'Pagination tracking added — awaiting first tracked scrape.'}</p>
               </div>
-              <Part3 storeRows={storeRows} />
+              <Part3 storeRows={storeRows} hasPageTracking={hasPageTracking} totalPagesTracked={totalPagesTracked} pagesVisitedRuns={pagesVisitedRuns} />
             </TabsContent>
 
             <TabsContent value="part4">
