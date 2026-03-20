@@ -1225,7 +1225,7 @@ export default function ScrapingAudit() {
                 <h2 className="text-sm font-semibold">Part 5 — Silent Failure Detection</h2>
                 <p className="text-xs text-muted-foreground">Identifies scraping problems that do not surface as visible errors.</p>
               </div>
-              <Part5 storeRows={storeRows} />
+              <Part5 storeRows={storeRows} nullEventStats={nullEventStats} />
             </TabsContent>
 
             <TabsContent value="part6">
