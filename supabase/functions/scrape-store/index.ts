@@ -430,6 +430,11 @@ Deno.serve(async (req) => {
           throw err;
         }
 
+        // 404 means no products at this URL — treat as empty, not an error
+        if (response.status === 404) {
+          await log('info', `products.json returned 404 on page ${page} — treating as no products`);
+          break;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status} on page ${page}`);
 
         const data = await response.json();
