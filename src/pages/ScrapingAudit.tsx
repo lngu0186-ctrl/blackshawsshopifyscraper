@@ -3,12 +3,13 @@
  * per store, category discovery, detail-fetch status, and silent failures.
  * All data is queried live from the database; nothing is hardcoded.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -16,9 +17,10 @@ import {
 import {
   CheckCircle2, AlertTriangle, XCircle, HelpCircle,
   Info, Database, Layers, SearchCode, Bug, Cpu, ListChecks,
-  ExternalLink, ChevronDown, ChevronRight,
+  ExternalLink, ChevronDown, ChevronRight, Play, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface StoreAuditRow {
@@ -211,6 +213,46 @@ function useEventSummary() {
       });
 
       return Object.values(map).sort((a, b) => b.count - a.count);
+    },
+  });
+}
+
+// Live count of scraper_events where store_id IS NULL
+function useNullStoreIdEventCount() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['audit_null_store_events', user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const [totalRes, nullRes] = await Promise.all([
+        supabase.from('scraper_events').select('id', { count: 'exact', head: true }).eq('user_id', user!.id),
+        supabase.from('scraper_events').select('id', { count: 'exact', head: true }).eq('user_id', user!.id).is('store_id', null),
+      ]);
+      return {
+        total: totalRes.count ?? 0,
+        nullCount: nullRes.count ?? 0,
+      };
+    },
+  });
+}
+
+// Live pages_visited per store (from scrape_run_stores page_count + scrape_runs pages_visited)
+function usePagesVisited() {
+  const { user } = useAuth();
+  return useQuery({
+    queryKey: ['audit_pages_visited', user?.id],
+    enabled: !!user,
+    staleTime: 30_000,
+    queryFn: async () => {
+      // Get latest completed scrape_runs with pages_visited
+      const { data } = await supabase
+        .from('scrape_runs')
+        .select('id, pages_visited, finished_at, status')
+        .eq('user_id', user!.id)
+        .order('finished_at', { ascending: false })
+        .limit(20);
+      return data ?? [];
     },
   });
 }
@@ -522,26 +564,49 @@ function Part2({ storeRows, catRows }: { storeRows: StoreAuditRow[]; catRows: Ca
 }
 
 // ─── Part 3: Pagination Audit ─────────────────────────────────────────────────
-function Part3({ storeRows }: { storeRows: StoreAuditRow[] }) {
+function Part3({ storeRows, hasPageTracking, totalPagesTracked, pagesVisitedRuns }: {
+  storeRows: StoreAuditRow[];
+  hasPageTracking: boolean;
+  totalPagesTracked: number;
+  pagesVisitedRuns: any[];
+}) {
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
-        <div className="flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
-          <div>
-            <p className="text-sm font-semibold text-foreground">Pagination depth is not tracked</p>
-            <p className="text-xs text-warning mt-1">
-              The current scraper does not persist per-page visit counts, per-category page depth, or 
-              cursor state per run. The <code className="font-mono text-xs">scrape_runs</code> table has no 
-              page_count column and <code className="font-mono text-xs">scraper_events</code> records 
-              no per-page stage events. Pagination can only be inferred from product counts vs expected site size.
-            </p>
+      {hasPageTracking ? (
+        <div className="rounded-lg border border-success/30 bg-success/5 p-4">
+          <div className="flex items-start gap-2">
+            <CheckCircle2 className="w-4 h-4 text-success shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Pagination tracking is active ✅</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                <strong>{totalPagesTracked.toLocaleString()} pages</strong> tracked across {pagesVisitedRuns.filter((r: any) => (r.pages_visited ?? 0) > 0).length} recent runs.
+                The <code className="font-mono text-xs bg-muted px-1">pages_visited</code> column on <code className="font-mono text-xs bg-muted px-1">scrape_runs</code> is now
+                populated. Per-page <code className="font-mono text-xs bg-muted px-1">page_fetched</code> events are emitted to <code className="font-mono text-xs bg-muted px-1">scraper_events</code>.
+                Note: historical scrapes before {new Date().toLocaleDateString('en-AU')} show "Not tracked".
+              </p>
+            </div>
           </div>
         </div>
-      </div>
+      ) : (
+        <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
+          <div className="flex items-start gap-2">
+            <Info className="w-4 h-4 text-warning shrink-0 mt-0.5" />
+            <div>
+              <p className="text-sm font-semibold text-foreground">Pagination tracking added — awaiting first tracked scrape</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                The <code className="font-mono text-xs bg-muted px-1">pages_visited</code> column has been added to <code className="font-mono text-xs bg-muted px-1">scrape_runs</code>,
+                and the scraper now emits <code className="font-mono text-xs bg-muted px-1">page_fetched</code> events per page and
+                a <code className="font-mono text-xs bg-muted px-1">pagination_complete</code> event when done.
+                Tracking will begin automatically from the next scrape run.
+                <strong className="block mt-1">Historical scrapes show "Not tracked" — this is expected.</strong>
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="space-y-3">
-        <h3 className="text-sm font-semibold">What we can infer from product counts</h3>
+        <h3 className="text-sm font-semibold">Per-store pagination status</h3>
         <div className="rounded-lg border border-border overflow-hidden">
           <Table>
             <TableHeader>
@@ -550,7 +615,7 @@ function Part3({ storeRows }: { storeRows: StoreAuditRow[] }) {
                 <TableHead className="text-xs">Strategy</TableHead>
                 <TableHead className="text-xs text-right">Products in DB</TableHead>
                 <TableHead className="text-xs">Pagination method</TableHead>
-                <TableHead className="text-xs">Inferred status</TableHead>
+                <TableHead className="text-xs">Status</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -558,29 +623,30 @@ function Part3({ storeRows }: { storeRows: StoreAuditRow[] }) {
                 let method = 'N/A';
                 let inferred = '';
                 if (s.scrape_strategy === 'products_json') {
-                  method = '/products.json?page=N (limit 250)';
+                  method = '/collections.json → per-collection products.json (new) | fallback: flat products.json';
                   inferred = s.db_products === 0
                     ? '❌ No products — either fetch failed or site returned empty'
                     : s.db_products > 200
                     ? '✅ Multiple pages likely fetched (>200 products)'
                     : s.db_products === 250 || s.db_products === 500
                     ? '⚠️ Round number — possible page limit hit'
-                    : '⚠️ Unknown — no page count recorded';
+                    : hasPageTracking ? '⚠️ Unknown — re-scrape to get page count' : '⚠️ Historical — page count not tracked';
                 } else if (s.scrape_strategy === 'sitemap_handles') {
                   method = 'sitemap.xml → individual product URLs';
-                  inferred = s.db_products === 0 ? '❌ No products fetched from sitemap' : '⚠️ Sitemap pagination not tracked';
+                  inferred = s.db_products === 0 ? '❌ No products fetched from sitemap' : hasPageTracking ? '⚠️ Per-product fetches tracked in pages_visited' : '⚠️ Historical — not tracked';
                 }
                 return (
                   <TableRow key={s.id}>
                     <TableCell className="text-xs font-medium">{s.name}</TableCell>
                     <TableCell><span className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{s.scrape_strategy}</span></TableCell>
                     <TableCell className="text-right text-xs tabular-nums font-semibold">{s.db_products}</TableCell>
-                    <TableCell className="text-xs">{method}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{method}</TableCell>
                     <TableCell className="text-xs">{inferred || <NotTracked />}</TableCell>
                   </TableRow>
                 );
               })}
             </TableBody>
+
           </Table>
         </div>
         <p className="text-xs text-muted-foreground">
@@ -670,25 +736,29 @@ function Part4({ storeRows }: { storeRows: StoreAuditRow[] }) {
 }
 
 // ─── Part 5: Silent Failures ─────────────────────────────────────────────────
-function Part5({ storeRows }: { storeRows: StoreAuditRow[] }) {
+function Part5({ storeRows, nullEventStats }: { storeRows: StoreAuditRow[]; nullEventStats: { total: number; nullCount: number } }) {
   const noProducts = storeRows.filter(s => s.db_products === 0 && ['active', 'validated'].includes(s.store_status));
   const noEvents = storeRows.filter(s => s.events === 0 && s.db_products > 0);
   const allZeroConf = storeRows.filter(s => s.zero_conf === s.db_products && s.db_products > 0);
-  const orphanedEvents = storeRows.filter(s => false); // computed below at page level
-  const totalEventsNoStoreId = 401; // from DB query: 401 of 438 events have no store_id
+  const nullPct = nullEventStats.total > 0 ? Math.round((nullEventStats.nullCount / nullEventStats.total) * 100) : 0;
+  const isFixed = nullEventStats.nullCount === 0;
 
   return (
     <div className="space-y-6">
-      {/* Global finding */}
-      <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
-        <p className="text-sm font-semibold text-destructive mb-2 flex items-center gap-2">
-          <Bug className="w-4 h-4" /> Critical: scraper_events store linkage broken
+      {/* Global finding — live from DB */}
+      <div className={cn('rounded-lg border p-4', isFixed ? 'border-success/30 bg-success/5' : 'border-destructive/30 bg-destructive/5')}>
+        <p className={cn('text-sm font-semibold mb-2 flex items-center gap-2', isFixed ? 'text-success' : 'text-destructive')}>
+          {isFixed ? <CheckCircle2 className="w-4 h-4" /> : <Bug className="w-4 h-4" />}
+          {isFixed
+            ? 'scraper_events store linkage: ✅ Fixed'
+            : 'scraper_events store linkage: ⚠️ Events with NULL store_id'}
         </p>
         <p className="text-xs text-foreground">
-          <strong>401 of 438 total scraper_events (91.5%) have <code className="font-mono bg-muted px-1 rounded">store_id = NULL</code></strong>.
-          This means almost all diagnostic events cannot be traced back to a store. Filtering events by store on the Diagnostics page 
-          will return near-zero results for most stores. The scrape-store edge function is not passing <code className="font-mono text-xs bg-muted px-1 rounded">store_id</code> 
-          {' '}when inserting events into scraper_events.
+          {isFixed
+            ? <><strong>All {nullEventStats.total} scraper_events have store_id set.</strong> Historical NULL events were backfilled via migration. New events from the fixed scrape-store function will always include store_id.</>
+            : <><strong>{nullEventStats.nullCount.toLocaleString()} of {nullEventStats.total.toLocaleString()} total scraper_events ({nullPct}%) have <code className="font-mono bg-muted px-1 rounded">store_id = NULL</code></strong>.
+              {' '}A backfill migration has been run. Remaining NULL events could not be matched to a store via run_id. New scrapes will always include store_id.</>
+          }
         </p>
       </div>
 
@@ -782,34 +852,41 @@ function Part5({ storeRows }: { storeRows: StoreAuditRow[] }) {
 }
 
 // ─── Part 6: Platform Methods ─────────────────────────────────────────────────
-function Part6({ storeRows }: { storeRows: StoreAuditRow[] }) {
+function Part6({ storeRows, onDetectPlatforms, detectingPlatforms }: { storeRows: StoreAuditRow[]; onDetectPlatforms: () => void; detectingPlatforms: boolean }) {
   const totalStores = storeRows.length;
   const unknownPlatform = storeRows.filter(s => !s.platform || s.platform === 'unknown').length;
   const shopifyStores = storeRows.filter(s => s.platform === 'shopify');
-  const wooStores = storeRows.filter(s => s.platform === 'woocommerce');
   const productsJsonStores = storeRows.filter(s => s.scrape_strategy === 'products_json');
   const sitemapStores = storeRows.filter(s => s.scrape_strategy === 'sitemap_handles');
+  const allDetected = unknownPlatform === 0;
 
   return (
     <div className="space-y-6">
       {/* Platform detection status */}
-      <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
-        <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
-          <AlertTriangle className="w-4 h-4" /> Platform detection has not been persisted for any store
-        </p>
-        <p className="text-xs text-warning">
-          All {totalStores} stores have <code className="font-mono text-xs bg-white/60 px-1 rounded">platform = "unknown"</code>.
-          The validate-store edge function runs platform detection, but results are not being saved to the 
-          <code className="font-mono text-xs bg-white/60 px-1 rounded mx-1">platform</code> column of existing stores.
-          Only newly qualified stores (via Add Store) get a platform value.
-        </p>
+      <div className={cn('rounded-lg border p-4', allDetected ? 'border-success/30 bg-success/5' : 'border-warning/30 bg-warning/5')}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
+              {allDetected ? <CheckCircle2 className="w-4 h-4 text-success" /> : <AlertTriangle className="w-4 h-4 text-warning" />}
+              {allDetected ? 'Platform detection complete' : `${unknownPlatform} of ${totalStores} stores have platform = "unknown"`}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {allDetected
+                ? `All ${totalStores} stores have platform detected. Shopify: ${shopifyStores.length}.`
+                : 'Run platform detection to probe each store\'s endpoints and persist the result to stores.platform.'}
+            </p>
+          </div>
+          <Button size="sm" variant="outline" onClick={onDetectPlatforms} disabled={detectingPlatforms} className="shrink-0 text-xs">
+            {detectingPlatforms ? <><RefreshCw className="w-3 h-3 mr-1.5 animate-spin" /> Detecting…</> : <><Play className="w-3 h-3 mr-1.5" /> Run Detection</>}
+          </Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
         {/* Shopify scraping method */}
         <div className="rounded-lg border border-border p-4 bg-card">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-muted-foreground" /> Shopify stores
+            <Cpu className="w-4 h-4 text-muted-foreground" /> Shopify stores ({shopifyStores.length || '?'} detected)
           </h3>
           <div className="space-y-2 text-xs">
             <div className="flex items-start gap-2">
@@ -1031,9 +1108,32 @@ function Part7({ storeRows }: { storeRows: StoreAuditRow[] }) {
 
 // ─── Main page ────────────────────────────────────────────────────────────────
 export default function ScrapingAudit() {
+  const { user } = useAuth();
   const { data: storeRows = [], isLoading: storeLoading } = useStoreAudit();
   const { data: catRows = [], isLoading: catLoading } = useCategoryAudit();
   const { data: eventSummary = [], isLoading: evtLoading } = useEventSummary();
+  const { data: nullEventStats = { total: 0, nullCount: 0 } } = useNullStoreIdEventCount();
+  const { data: pagesVisitedRuns = [] } = usePagesVisited();
+
+  // Detect-platforms mutation (Block 6)
+  const detectPlatforms = useMutation({
+    mutationFn: async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/detect-platforms`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${session.access_token}` },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      toast.success(`Platform detection complete — ${data.processed} stores processed`);
+    },
+    onError: (e: any) => toast.error(e.message || 'Platform detection failed'),
+  });
 
   const isLoading = storeLoading || catLoading || evtLoading;
 
@@ -1052,6 +1152,10 @@ export default function ScrapingAudit() {
     return f.color === 'text-success';
   }).length;
 
+  // Pagination tracking: total pages across all tracked runs
+  const totalPagesTracked = pagesVisitedRuns.reduce((a: number, r: any) => a + (r.pages_visited ?? 0), 0);
+  const hasPageTracking = totalPagesTracked > 0;
+
   return (
     <ScrollArea className="h-full">
       <div className="p-6 max-w-7xl mx-auto">
@@ -1067,6 +1171,7 @@ export default function ScrapingAudit() {
             Where data was not tracked, this is explicitly stated.
           </p>
         </div>
+
 
         {/* Top KPIs */}
         <div className="grid grid-cols-6 gap-3 mb-6">
@@ -1133,9 +1238,9 @@ export default function ScrapingAudit() {
             <TabsContent value="part3">
               <div className="mb-3">
                 <h2 className="text-sm font-semibold">Part 3 — Pagination Audit</h2>
-                <p className="text-xs text-muted-foreground">Pagination depth is not currently tracked. This section shows what can be inferred from product counts.</p>
+                <p className="text-xs text-muted-foreground">{hasPageTracking ? `${totalPagesTracked} pages tracked across recent runs.` : 'Pagination tracking added — awaiting first tracked scrape.'}</p>
               </div>
-              <Part3 storeRows={storeRows} />
+              <Part3 storeRows={storeRows} hasPageTracking={hasPageTracking} totalPagesTracked={totalPagesTracked} pagesVisitedRuns={pagesVisitedRuns} />
             </TabsContent>
 
             <TabsContent value="part4">
@@ -1151,7 +1256,7 @@ export default function ScrapingAudit() {
                 <h2 className="text-sm font-semibold">Part 5 — Silent Failure Detection</h2>
                 <p className="text-xs text-muted-foreground">Identifies scraping problems that do not surface as visible errors.</p>
               </div>
-              <Part5 storeRows={storeRows} />
+              <Part5 storeRows={storeRows} nullEventStats={nullEventStats} />
             </TabsContent>
 
             <TabsContent value="part6">
@@ -1159,7 +1264,7 @@ export default function ScrapingAudit() {
                 <h2 className="text-sm font-semibold">Part 6 — Platform-Specific Scraping Method Audit</h2>
                 <p className="text-xs text-muted-foreground">Analysis of which scraping methods are in use and their limitations.</p>
               </div>
-              <Part6 storeRows={storeRows} />
+              <Part6 storeRows={storeRows} onDetectPlatforms={() => detectPlatforms.mutate()} detectingPlatforms={detectPlatforms.isPending} />
             </TabsContent>
 
             <TabsContent value="part7">

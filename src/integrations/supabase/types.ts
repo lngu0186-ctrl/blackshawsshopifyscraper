@@ -583,6 +583,7 @@ export type Database = {
           error_count: number
           finished_at: string | null
           id: string
+          pages_visited: number
           run_status: string
           settings: Json | null
           started_at: string | null
@@ -599,6 +600,7 @@ export type Database = {
           error_count?: number
           finished_at?: string | null
           id?: string
+          pages_visited?: number
           run_status?: string
           settings?: Json | null
           started_at?: string | null
@@ -615,6 +617,7 @@ export type Database = {
           error_count?: number
           finished_at?: string | null
           id?: string
+          pages_visited?: number
           run_status?: string
           settings?: Json | null
           started_at?: string | null

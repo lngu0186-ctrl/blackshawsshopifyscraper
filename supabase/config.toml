@@ -24,3 +24,6 @@ verify_jwt = false
 [functions.analyze-failure]
 verify_jwt = false
 
+[functions.detect-platforms]
+verify_jwt = false
+
