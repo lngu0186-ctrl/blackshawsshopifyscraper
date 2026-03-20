@@ -490,7 +490,7 @@ export default function Dashboard() {
                   {[
                     { label: 'Shopify Ready',   value: readyCount,   total: totalScraped, color: 'bg-success', icon: CheckCircle2, iconCls: 'text-success' },
                     { label: 'Review Required', value: reviewCount,  total: totalScraped, color: 'bg-warning', icon: AlertTriangle, iconCls: 'text-warning' },
-                    { label: 'Partial / Raw',   value: qualityStats?.partial ?? 0, total: totalScraped, color: 'bg-destructive', icon: XCircle, iconCls: 'text-destructive' },
+                    { label: 'Partial / Raw',   value: pipeline?.partialRaw ?? 0, total: totalScraped, color: 'bg-destructive', icon: XCircle, iconCls: 'text-destructive' },
                   ].map(row => {
                     const pct = totalScraped > 0 ? Math.round((row.value / totalScraped) * 100) : 0;
                     return (
