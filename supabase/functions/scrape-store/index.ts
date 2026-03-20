@@ -500,6 +500,10 @@ Deno.serve(async (req) => {
         await log('info', `strategy: collections_json — fetching page ${page} — ${totalProducts} products`);
 
         const response = await fetchWithRetry(nextUrl, authHeaders);
+        if (response.status === 404) {
+          await log('info', `collections_json returned 404 on page ${page} — treating as no products`);
+          break;
+        }
         if (!response.ok) throw new Error(`HTTP ${response.status} on page ${page}`);
 
         const data = await response.json();
