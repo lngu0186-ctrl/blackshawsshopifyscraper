@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Database, Package, Download,
   Activity, Settings, Plus, Loader2, ToggleLeft, ToggleRight,
   Trash2, Pill, ChevronDown, ChevronUp, LogOut, Lock, ShieldAlert,
-  Store, Stethoscope, CheckCheck, XCircle, AlertTriangle, Filter,
+  Store, Stethoscope, CheckCheck, XCircle, AlertTriangle, Filter, SearchCode,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
