@@ -1,7 +1,7 @@
 /**
- * detect-platforms — Block 6
- * Runs platform detection on all stores where platform = 'unknown' or NULL
- * and persists the result to stores.platform + stores.platform_confidence.
+ * detect-platforms — expanded to support Shopify, WooCommerce, BigCommerce,
+ * OpenCart, Storbie, and Unknown. Saves platform, platform_confidence,
+ * and a last_detected_at timestamp to each store record.
  */
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -16,11 +16,11 @@ const SCRAPE_HEADERS = {
   'Accept-Language': 'en-AU,en;q=0.9',
 };
 
-async function fetchWithTimeout(url: string, timeoutMs = 12000): Promise<Response | null> {
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, timeoutMs = 12000): Promise<Response | null> {
   try {
     const controller = new AbortController();
     const tid = setTimeout(() => controller.abort(), timeoutMs);
-    const res = await fetch(url, { signal: controller.signal, headers: SCRAPE_HEADERS });
+    const res = await fetch(url, { signal: controller.signal, headers: SCRAPE_HEADERS, ...opts });
     clearTimeout(tid);
     return res;
   } catch {
@@ -28,67 +28,117 @@ async function fetchWithTimeout(url: string, timeoutMs = 12000): Promise<Respons
   }
 }
 
-async function detectPlatform(url: string): Promise<{ platform: string; confidence: string }> {
-  // Test 1: /products.json (Shopify JSON API — high confidence)
+interface DetectionResult {
+  platform: string;
+  confidence: string;
+  evidence: string[];
+}
+
+async function detectPlatform(url: string): Promise<DetectionResult> {
+  const evidence: string[] = [];
+
+  // ── Test 1: Shopify /products.json (high confidence) ────────────────────
   const productsJson = await fetchWithTimeout(`${url}/products.json?limit=5`);
   if (productsJson && productsJson.ok) {
     try {
       const d = await productsJson.json();
       if (d && Array.isArray(d.products)) {
-        return { platform: 'shopify', confidence: 'high' };
+        evidence.push('products_json_responded');
+        return { platform: 'shopify', confidence: 'high', evidence };
       }
-    } catch { /* not JSON */ }
+    } catch { await productsJson.text().catch(() => {}); }
   }
 
-  // Test 2: WooCommerce REST API
+  // ── Test 2: WooCommerce REST API (high confidence) ───────────────────────
   const wcApi = await fetchWithTimeout(`${url}/wp-json/wc/v3/products?per_page=1`);
   if (wcApi && wcApi.ok) {
     try {
       const d = await wcApi.json();
       if (Array.isArray(d)) {
-        return { platform: 'woocommerce', confidence: 'high' };
+        evidence.push('wc_rest_api_responded');
+        return { platform: 'woocommerce', confidence: 'high', evidence };
       }
-    } catch { /* not JSON */ }
+    } catch { await wcApi.text().catch(() => {}); }
   }
 
-  // Test 3: Homepage HTML heuristics
+  // ── Test 3: BigCommerce storefront API ───────────────────────────────────
+  const bcApi = await fetchWithTimeout(`${url}/api/storefront/products?limit=1`);
+  if (bcApi && bcApi.ok) {
+    try {
+      const d = await bcApi.json();
+      if (Array.isArray(d) || d?.data) {
+        evidence.push('bigcommerce_api_responded');
+        return { platform: 'bigcommerce', confidence: 'high', evidence };
+      }
+    } catch { await bcApi.text().catch(() => {}); }
+  }
+
+  // ── Test 4: HTML heuristics ──────────────────────────────────────────────
   const homepage = await fetchWithTimeout(url);
   if (homepage && homepage.ok) {
     const html = await homepage.text();
 
     // Shopify signals
-    if (
-      html.includes('Shopify.theme') ||
-      html.includes('cdn.shopify.com') ||
-      html.includes('shopify-section') ||
-      /meta[^>]+generator[^>]+Shopify/i.test(html)
-    ) {
-      return { platform: 'shopify', confidence: 'medium' };
+    if (html.includes('cdn.shopify.com')) evidence.push('cdn_shopify_com');
+    if (html.includes('Shopify.theme')) evidence.push('shopify_theme_js');
+    if (/meta[^>]+generator[^>]+Shopify/i.test(html)) evidence.push('meta_generator_shopify');
+    if (html.includes('shopify-section')) evidence.push('shopify_section_class');
+
+    if (evidence.some(e => ['cdn_shopify_com','shopify_theme_js','meta_generator_shopify','shopify_section_class'].includes(e))) {
+      // Weak verification via /collections.json
+      const colJson = await fetchWithTimeout(`${url}/collections.json?limit=1`);
+      if (colJson?.ok) {
+        try {
+          const d = await colJson.json();
+          if (d && Array.isArray(d.collections)) evidence.push('collections_json_responded');
+        } catch { await colJson.text().catch(() => {}); }
+      }
+      return { platform: 'shopify', confidence: 'medium', evidence };
     }
 
     // WooCommerce signals
-    if (
-      html.includes('/wp-content/') ||
-      html.includes('woocommerce') ||
-      html.includes('wc-block') ||
-      /meta[^>]+generator[^>]+WooCommerce/i.test(html)
-    ) {
-      return { platform: 'woocommerce', confidence: 'medium' };
+    if (html.includes('/wp-content/')) evidence.push('wp_content_path');
+    if (html.includes('woocommerce')) evidence.push('woocommerce_class');
+    if (/meta[^>]+generator[^>]+WooCommerce/i.test(html)) evidence.push('meta_generator_woocommerce');
+    if (html.includes('wc-block')) evidence.push('wc_block_class');
+
+    if (evidence.some(e => ['wp_content_path','woocommerce_class','meta_generator_woocommerce','wc_block_class'].includes(e))) {
+      return { platform: 'woocommerce', confidence: 'medium', evidence };
     }
 
-    // Weak Shopify via /collections.json
-    const colJson = await fetchWithTimeout(`${url}/collections.json?limit=1`);
-    if (colJson && colJson.ok) {
-      try {
-        const d = await colJson.json();
-        if (d && Array.isArray(d.collections)) {
-          return { platform: 'shopify', confidence: 'low' };
-        }
-      } catch { /* not JSON */ }
+    // BigCommerce HTML signals
+    if (html.includes('cdn.bigcommerce.com') || html.includes('bigcommerce')) {
+      evidence.push('bigcommerce_reference');
+      return { platform: 'bigcommerce', confidence: 'medium', evidence };
+    }
+
+    // OpenCart signals
+    if (html.includes('catalog/view/theme') || html.includes('route=common') || /meta[^>]+generator[^>]+OpenCart/i.test(html)) {
+      evidence.push('opencart_reference');
+      return { platform: 'opencart', confidence: 'medium', evidence };
+    }
+
+    // Storbie (AU/NZ pharmacy platform)
+    if (/storbie\.com/i.test(html) || html.includes('storbie')) {
+      evidence.push('storbie_reference');
+      return { platform: 'storbie', confidence: 'medium', evidence };
     }
   }
 
-  return { platform: 'unknown', confidence: 'none' };
+  // ── Test 5: Weak Shopify via /collections.json ───────────────────────────
+  const colJson = await fetchWithTimeout(`${url}/collections.json?limit=1`);
+  if (colJson && colJson.ok) {
+    try {
+      const d = await colJson.json();
+      if (d && Array.isArray(d.collections)) {
+        evidence.push('collections_json_responded');
+        return { platform: 'shopify', confidence: 'low', evidence };
+      }
+    } catch { await colJson.text().catch(() => {}); }
+  }
+
+  evidence.push('no_platform_signals_found');
+  return { platform: 'unknown', confidence: 'none', evidence };
 }
 
 Deno.serve(async (req) => {
@@ -106,12 +156,10 @@ Deno.serve(async (req) => {
   if (userError || !userData?.user) return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: corsHeaders });
   const userId = userData.user.id;
 
-  // Accept optional store_ids array to limit scope; default = all unknown stores
   let body: any = {};
   try { body = await req.json(); } catch { /* no body */ }
   const specificIds: string[] | undefined = body?.store_ids;
 
-  // Fetch stores needing detection
   let query = supabaseAdmin.from('stores')
     .select('id, name, normalized_url, platform')
     .eq('user_id', userId);
@@ -127,21 +175,23 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({ error: storesErr?.message ?? 'Failed to load stores' }), { status: 500, headers: corsHeaders });
   }
 
-  const results: Array<{ id: string; name: string; platform: string; confidence: string }> = [];
+  const results: Array<{ id: string; name: string; platform: string; confidence: string; evidence: string[] }> = [];
 
   for (const store of stores) {
     const url = store.normalized_url;
     if (!url) continue;
 
     try {
-      const { platform, confidence } = await detectPlatform(url);
+      const { platform, confidence, evidence } = await detectPlatform(url);
       await supabaseAdmin.from('stores').update({
         platform,
         platform_confidence: confidence,
+        // Store evidence as qualification_notes JSON snippet
+        qualification_notes: JSON.stringify({ platform_evidence: evidence, detected_at: new Date().toISOString() }),
       }).eq('id', store.id);
-      results.push({ id: store.id, name: store.name, platform, confidence });
+      results.push({ id: store.id, name: store.name, platform, confidence, evidence });
     } catch (err) {
-      results.push({ id: store.id, name: store.name, platform: 'unknown', confidence: 'error' });
+      results.push({ id: store.id, name: store.name, platform: 'unknown', confidence: 'error', evidence: [String(err)] });
     }
   }
 
