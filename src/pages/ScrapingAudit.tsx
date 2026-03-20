@@ -1195,7 +1195,7 @@ export default function ScrapingAudit() {
           <div className="flex items-center justify-center py-24 text-muted-foreground text-sm">Loading audit data…</div>
         ) : (
           <Tabs defaultValue="part1">
-            <TabsList className="mb-4">
+            <TabsList className="mb-4 flex-wrap">
               <TabsTrigger value="part1" className="text-xs flex items-center gap-1.5">
                 <Database className="w-3 h-3" /> Per-Store Coverage
               </TabsTrigger>
@@ -1216,6 +1216,9 @@ export default function ScrapingAudit() {
               </TabsTrigger>
               <TabsTrigger value="part7" className="text-xs flex items-center gap-1.5">
                 <CheckCircle2 className="w-3 h-3" /> Recommendations
+              </TabsTrigger>
+              <TabsTrigger value="verify" className="text-xs flex items-center gap-1.5">
+                <RefreshCw className="w-3 h-3" /> Fix Verification
               </TabsTrigger>
             </TabsList>
 
