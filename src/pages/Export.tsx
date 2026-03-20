@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useScrapedProducts, useDataQualityStats, useScrapeSource, useEnrichProducts, useCreateScrapeJob, type ExportMode } from '@/hooks/useScrapedProducts';
+import { useScrapedProducts, useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
+import { usePipelineStats } from '@/hooks/usePipelineStats';
 import { exportShopifyReadyCsv, exportReviewRequiredCsv } from '@/lib/csvExport';
 import { exportFullRawExcel } from '@/lib/xlsxExport';
 import { useExport } from '@/hooks/useExport';
@@ -11,16 +12,16 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileText, FileSpreadsheet, History, Loader2, CheckCircle2, AlertTriangle, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { Download, FileText, FileSpreadsheet, History, Loader2, CheckCircle2, AlertTriangle, XCircle, RefreshCw, ExternalLink, Info } from 'lucide-react';
 import { SITE_ADAPTERS } from '@/lib/siteAdapters';
 import { toast } from 'sonner';
 
 // ─── Data Quality Panel ──────────────────────────────────────────────────────
 function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
-  const { data: stats, isLoading } = useDataQualityStats();
+  const { data: stats, isLoading } = usePipelineStats();
   const enrichMutation = useEnrichProducts();
 
-  const total = stats?.total ?? 0;
+  const total = stats?.discovered ?? 0;
   const pct = (n: number) => total > 0 ? Math.round((n / total) * 100) : 0;
 
   function Bar({ value, max, color }: { value: number; max: number; color: string }) {
@@ -41,13 +42,13 @@ function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
 
       <div className="space-y-2.5">
         <div className="flex items-center gap-3 text-xs">
-          <span className="text-muted-foreground w-32 shrink-0">Total scraped</span>
+          <span className="text-muted-foreground w-32 shrink-0">Total discovered</span>
           <span className="font-semibold tabular-nums">{total.toLocaleString()}</span>
         </div>
         {[
-          { label: 'Shopify Ready', value: stats?.ready ?? 0, color: 'bg-primary', icon: <CheckCircle2 className="w-3 h-3 text-primary" /> },
-          { label: 'Review Needed', value: stats?.review ?? 0, color: 'bg-warning', icon: <AlertTriangle className="w-3 h-3 text-warning" /> },
-          { label: 'Partial / Raw', value: stats?.partial ?? 0, color: 'bg-destructive', icon: <XCircle className="w-3 h-3 text-destructive" /> },
+          { label: 'Shopify Ready',  value: stats?.readyCount ?? 0,    color: 'bg-primary',     icon: <CheckCircle2 className="w-3 h-3 text-primary" /> },
+          { label: 'Review Needed',  value: stats?.reviewRequired ?? 0, color: 'bg-warning',     icon: <AlertTriangle className="w-3 h-3 text-warning" /> },
+          { label: 'Partial / Raw',  value: stats?.partialRaw ?? 0,    color: 'bg-destructive',  icon: <XCircle className="w-3 h-3 text-destructive" /> },
         ].map(row => (
           <div key={row.label} className="flex items-center gap-3 text-xs">
             <span className="text-muted-foreground w-32 shrink-0 flex items-center gap-1">{row.icon}{row.label}</span>
@@ -63,6 +64,11 @@ function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
         <div className="flex justify-between"><span>Missing image</span><span className="font-medium text-foreground">{stats?.missingImage ?? 0}</span></div>
         <div className="flex justify-between"><span>Missing description</span><span className="font-medium text-foreground">{stats?.missingDescription ?? 0}</span></div>
         <div className="flex justify-between"><span>Detail page failed</span><span className="font-medium text-foreground">{stats?.detailFailed ?? 0}</span></div>
+      </div>
+
+      <div className="rounded-lg bg-muted/50 border border-border p-3 text-xs text-muted-foreground flex gap-2">
+        <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+        <span>Export button counts below are derived from this same data. No discrepancy.</span>
       </div>
 
       <Button
@@ -268,31 +274,63 @@ export default function Export() {
   const { exportShopifyCsv, exportJson, exportExcel, exportPriceHistoryCsv } = useExport();
   const storeIds = scope === 'selected' ? selectedStoreIds : undefined;
 
-  // Scraped products export
-  const { data: allProductsData } = useScrapedProducts({ pageSize: 10000 });
-  const allProducts = allProductsData?.data ?? [];
-  const readyCount = allProducts.filter(p => p.confidence_score >= 90 && p.price != null).length;
-  const reviewCount = allProducts.filter(p => (p.confidence_score >= 60 && p.confidence_score < 90) || p.price == null).length;
+  // Use canonical pipeline stats for all counts — same source as Dashboard
+  const { data: pipeline, isLoading: pipelineLoading } = usePipelineStats();
+  const readyCount    = pipeline?.readyCount ?? 0;
+  const reviewCount   = pipeline?.reviewRequired ?? 0;
+  const totalProducts = pipeline?.discovered ?? 0;
   const enrichMutation = useEnrichProducts();
 
-  function handleExportReady() {
-    const eligible = allProducts.filter(p => p.confidence_score >= 90 && p.price != null);
+  // Lazy-load all products only when export is triggered
+  async function fetchAllForExport(minScore?: number, maxScore?: number, requirePrice?: boolean) {
+    const { useAuth: _u, ..._ } = await import('@/hooks/useAuth');
+    // Use supabase directly with paginated loop
+    const { supabase: sb } = await import('@/lib/supabase');
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return [];
+    let all: any[] = [];
+    let from = 0;
+    const batchSize = 500;
+    while (true) {
+      let q = sb
+        .from('scraped_products')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .range(from, from + batchSize - 1);
+      if (minScore != null) q = q.gte('confidence_score', minScore);
+      if (maxScore != null) q = q.lt('confidence_score', maxScore);
+      if (requirePrice) q = q.not('price', 'is', null);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      all = [...all, ...data];
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+    return all;
+  }
+
+  async function handleExportReady() {
+    toast.info('Fetching export-ready products…');
+    const eligible = await fetchAllForExport(90, undefined, true);
     if (eligible.length === 0) { toast.info('No Shopify-ready products to export'); return; }
-    exportShopifyReadyCsv(eligible);
+    exportShopifyReadyCsv(eligible as any);
     toast.success(`Exported ${eligible.length} Shopify-ready rows`);
   }
 
-  function handleExportReview() {
-    const eligible = allProducts.filter(p => (p.confidence_score >= 60 && p.confidence_score < 90) || p.price == null);
+  async function handleExportReview() {
+    toast.info('Fetching review-required products…');
+    const eligible = await fetchAllForExport(60, 90, false);
     if (eligible.length === 0) { toast.info('No review-required products'); return; }
-    exportReviewRequiredCsv(eligible);
+    exportReviewRequiredCsv(eligible as any);
     toast.success(`Exported ${eligible.length} review-required rows`);
   }
 
-  function handleExportRaw() {
-    if (allProducts.length === 0) { toast.info('No products to export'); return; }
-    exportFullRawExcel(allProducts);
-    toast.success(`Exporting ${allProducts.length} rows as Excel`);
+  async function handleExportRaw() {
+    toast.info('Fetching all products for Excel export…');
+    const all = await fetchAllForExport();
+    if (all.length === 0) { toast.info('No products to export'); return; }
+    exportFullRawExcel(all as any);
+    toast.success(`Exported ${all.length} rows as Excel`);
   }
 
   return (
@@ -342,7 +380,7 @@ export default function Export() {
                   <FileSpreadsheet className="w-4 h-4 text-primary" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Export Full Raw Excel</p>
-                    <p className="text-xs text-muted-foreground">{allProducts.length.toLocaleString()} rows — all data + debug columns</p>
+                    <p className="text-xs text-muted-foreground">{totalProducts.toLocaleString()} rows — all data + debug columns</p>
                   </div>
                 </Button>
 

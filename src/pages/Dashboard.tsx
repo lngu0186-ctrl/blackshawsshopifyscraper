@@ -4,7 +4,8 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useStores } from '@/hooks/useStores';
 import { useScrapeRun } from '@/hooks/useScrapeRun';
-import { useDataQualityStats, useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
+import { useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
+import { usePipelineStats } from '@/hooks/usePipelineStats';
 import { SITE_ADAPTERS } from '@/lib/siteAdapters';
 import { Link } from 'react-router-dom';
 import {
@@ -252,7 +253,7 @@ export default function Dashboard() {
   const { data: stores, isLoading: storesLoading } = useStores();
   const queryClient = useQueryClient();
   const { status: scrapeStatus, runData, storeStatuses, logs, startRun, cancelRun, resetRun, isRunning } = useScrapeRun();
-  const { data: qualityStats, isLoading: qualityLoading } = useDataQualityStats();
+  const { data: pipeline, isLoading: pipelineLoading } = usePipelineStats();
   const [searchTerm, setSearchTerm] = useState('');
   const scrapeSource = useScrapeSource();
   const enrichMutation = useEnrichProducts();
@@ -264,45 +265,29 @@ export default function Dashboard() {
     logsEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [logs.length]);
 
-  // Global stats query
-  const { data: stats, isLoading: statsLoading } = useQuery({
-    queryKey: ['dashboard_stats', user?.id],
+  // Price changes count (from Shopify store scraping pipeline — separate from scraped_products)
+  const { data: priceChangesCount } = useQuery({
+    queryKey: ['price_changes_count', user?.id],
     enabled: !!user,
     staleTime: 30_000,
     queryFn: async () => {
-      const [productRes, changeRes] = await Promise.all([
-        supabase.from('products').select('id', { count: 'exact', head: true }).eq('user_id', user!.id),
-        supabase.from('variant_price_history').select('id', { count: 'exact', head: true })
-          .eq('user_id', user!.id).eq('price_changed', true),
-      ]);
-      return {
-        totalProducts: productRes.count ?? 0,
-        totalChanges: changeRes.count ?? 0,
-      };
+      const { count } = await supabase
+        .from('variant_price_history')
+        .select('id', { count: 'exact', head: true })
+        .eq('user_id', user!.id)
+        .eq('price_changed', true);
+      return count ?? 0;
     },
   });
 
-  // Per-source stats from scraped_products
-  const { data: sourceStatsRaw } = useQuery({
-    queryKey: ['source_stats', user?.id],
-    enabled: !!user,
-    staleTime: 20_000,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('scraped_products')
-        .select('source_key, price, image_url, detail_scraped, confidence_score')
-        .eq('user_id', user!.id);
-      return data ?? [];
-    },
-  });
-
+  // Per-source stats come from pipeline.bySource
   const sourceStats = Object.entries(SITE_ADAPTERS).reduce((acc, [key]) => {
-    const rows = (sourceStatsRaw ?? []).filter((r: any) => r.source_key === key);
+    const s = pipeline?.bySource[key];
     acc[key] = {
-      discovered: rows.length,
-      enriched: rows.filter((r: any) => r.detail_scraped).length,
-      missingPrice: rows.filter((r: any) => r.price == null).length,
-      missingImage: rows.filter((r: any) => !r.image_url).length,
+      discovered: s?.discovered ?? 0,
+      enriched: s?.enriched ?? 0,
+      missingPrice: s?.missingPrice ?? 0,
+      missingImage: s?.missingImage ?? 0,
     };
     return acc;
   }, {} as Record<string, any>);
@@ -317,15 +302,14 @@ export default function Dashboard() {
   const totalStores = runData?.total_stores ?? 0;
   const runProgress = totalStores > 0 ? Math.round((completedStores / totalStores) * 100) : 0;
 
-  const totalScraped = qualityStats?.total ?? 0;
-  const readyCount   = qualityStats?.ready ?? 0;
-  const reviewCount  = qualityStats?.review ?? 0;
+  // Use canonical pipeline stats everywhere
+  const totalScraped   = pipeline?.discovered ?? 0;
+  const readyCount     = pipeline?.readyCount ?? 0;
+  const reviewCount    = pipeline?.reviewRequired ?? 0;
 
   async function handleStartScrape() {
     await startRun();
-    queryClient.invalidateQueries({ queryKey: ['products'] });
-    queryClient.invalidateQueries({ queryKey: ['dashboard_stats'] });
-    queryClient.invalidateQueries({ queryKey: ['source_stats'] });
+    queryClient.invalidateQueries({ queryKey: ['pipeline_stats'] });
   }
 
   async function handleScrapeSource(sourceKey: string) {
@@ -337,25 +321,23 @@ export default function Dashboard() {
     enrichMutation.mutate({ source_key: sourceKey, limit: 50 });
   }
 
-  // Pipeline stages (from scrape run)
-  const totalProducts = runData?.total_products ?? stats?.totalProducts ?? 0;
+  // Pipeline stages (from scrape run + canonical counts)
   const pipelineStages = [
     { icon: Globe,     label: 'Sources Detected',         done: totalStores, total: enabledStores.length, success: completedStores, warning: runData?.error_count ?? 0, error: 0, active: isRunning && completedStores === 0 },
     { icon: Layers,    label: 'Categories Discovered',    done: completedStores, total: totalStores || enabledStores.length, success: completedStores, warning: 0, error: runData?.error_count ?? 0, active: isRunning && completedStores > 0 && completedStores < totalStores },
-    { icon: Package,   label: 'Products Found',           done: totalProducts, total: Math.max(totalProducts, (stats?.totalProducts ?? 0)), success: totalProducts, warning: 0, error: 0, active: false },
-    { icon: Eye,       label: 'Detail Pages Enriched',    done: qualityStats?.total ?? 0, total: Math.max(qualityStats?.total ?? 0, totalScraped), success: readyCount, warning: reviewCount, error: qualityStats?.partial ?? 0, active: false },
-    { icon: Tag,       label: 'Price Extracted',          done: totalScraped - (qualityStats?.missingPrice ?? 0), total: totalScraped, success: readyCount, warning: 0, error: qualityStats?.missingPrice ?? 0, active: false },
-    { icon: Image,     label: 'Images Extracted',         done: totalScraped - (qualityStats?.missingImage ?? 0), total: totalScraped, success: 0, warning: qualityStats?.missingImage ?? 0, error: 0, active: false },
-    { icon: FileText,  label: 'Descriptions Extracted',   done: totalScraped - (qualityStats?.missingDescription ?? 0), total: totalScraped, success: 0, warning: qualityStats?.missingDescription ?? 0, error: 0, active: false },
-    { icon: CheckCircle2, label: 'Validation Complete',   done: readyCount, total: totalScraped, success: readyCount, warning: reviewCount, error: qualityStats?.detailFailed ?? 0, active: false },
+    { icon: Package,   label: 'Products Discovered',      done: totalScraped, total: totalScraped, success: totalScraped, warning: 0, error: 0, active: false },
+    { icon: Eye,       label: 'Detail Pages Enriched',    done: pipeline?.enriched ?? 0, total: totalScraped, success: readyCount, warning: reviewCount, error: pipeline?.partialRaw ?? 0, active: false },
+    { icon: Tag,       label: 'Price Extracted',          done: totalScraped - (pipeline?.missingPrice ?? 0), total: totalScraped, success: readyCount, warning: 0, error: pipeline?.missingPrice ?? 0, active: false },
+    { icon: Image,     label: 'Images Extracted',         done: totalScraped - (pipeline?.missingImage ?? 0), total: totalScraped, success: 0, warning: pipeline?.missingImage ?? 0, error: 0, active: false },
+    { icon: FileText,  label: 'Descriptions Extracted',   done: totalScraped - (pipeline?.missingDescription ?? 0), total: totalScraped, success: 0, warning: pipeline?.missingDescription ?? 0, error: 0, active: false },
+    { icon: CheckCircle2, label: 'Validation Complete',   done: readyCount, total: totalScraped, success: readyCount, warning: reviewCount, error: pipeline?.failed ?? 0, active: false },
   ];
 
   const coverageFields = [
-    { label: 'Price', icon: Tag, covered: totalScraped - (qualityStats?.missingPrice ?? 0), total: totalScraped },
-    { label: 'Images', icon: Image, covered: totalScraped - (qualityStats?.missingImage ?? 0), total: totalScraped },
-    { label: 'Description', icon: FileText, covered: totalScraped - (qualityStats?.missingDescription ?? 0), total: totalScraped },
-    { label: 'Brand', icon: Store, covered: Math.round(totalScraped * 0.7), total: totalScraped },
-    { label: 'Category', icon: Layers, covered: Math.round(totalScraped * 0.8), total: totalScraped },
+    { label: 'Price',       icon: Tag,      covered: totalScraped - (pipeline?.missingPrice ?? 0),       total: totalScraped },
+    { label: 'Images',      icon: Image,    covered: totalScraped - (pipeline?.missingImage ?? 0),       total: totalScraped },
+    { label: 'Description', icon: FileText, covered: totalScraped - (pipeline?.missingDescription ?? 0), total: totalScraped },
+    { label: 'Barcode',     icon: Tag,      covered: totalScraped - (pipeline?.missingBarcode ?? 0),     total: totalScraped },
   ];
 
   return (
@@ -420,15 +402,29 @@ export default function Dashboard() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-6 max-w-[1440px] mx-auto">
 
-          {/* ── KPI Cards ───────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-            <KpiCard icon={Store}         label="Active Sources"    value={enabledStores.length}              sub={`of ${stores?.length ?? 0} total`}          color="text-primary"     loading={storesLoading} />
-            <KpiCard icon={Database}      label="Pages Crawled"     value={completedStores}                   sub={isRunning ? 'live' : 'last run'}            color="text-primary"     pulse={isRunning} />
-            <KpiCard icon={Package}       label="Products Found"    value={stats?.totalProducts ?? 0}         sub="all stores"                                  color="text-primary"     loading={statsLoading} />
-            <KpiCard icon={Zap}           label="Enriched"          value={qualityStats?.total ?? 0}          sub="detail fetched"                              color="text-success"     loading={qualityLoading} />
-            <KpiCard icon={CheckCircle2}  label="Export Ready"      value={readyCount}                        sub="≥90 confidence"                              color="text-success"     loading={qualityLoading} />
-            <KpiCard icon={AlertTriangle} label="Review Required"   value={reviewCount}                       sub="60–89 confidence"                            color="text-warning"     loading={qualityLoading} />
-            <KpiCard icon={Activity}      label="Price Changes"     value={stats?.totalChanges ?? 0}          sub="recorded"                                    color="text-destructive" loading={statsLoading} />
+          {/* ── KPI Cards — 7-cell pipeline breakdown ─────────────────────── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+            <Link to="/products" className="block">
+              <KpiCard icon={Database}      label="Discovered"        value={totalScraped}                       sub="total scraped"                              color="text-primary"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?review_status=pending" className="block">
+              <KpiCard icon={Loader2}       label="Queued"            value={pipeline?.queued ?? 0}              sub="awaiting enrichment"                        color="text-primary"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products" className="block">
+              <KpiCard icon={Zap}           label="Enriched"          value={pipeline?.enriched ?? 0}            sub="detail fetched"                             color="text-success"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?scrape_status=failed" className="block">
+              <KpiCard icon={XCircle}       label="Failed"            value={pipeline?.failed ?? 0}              sub="scrape failed"                              color="text-destructive" loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?review_status=pending" className="block">
+              <KpiCard icon={AlertTriangle} label="Review Required"   value={reviewCount}                        sub="60–89 confidence"                           color="text-warning"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?auth_blocked=1" className="block">
+              <KpiCard icon={Store}         label="Auth Blocked"      value={pipeline?.authBlocked ?? 0}         sub="login required"                             color="text-warning"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/export" className="block">
+              <KpiCard icon={CheckCircle2}  label="Export Ready"      value={pipeline?.exportReady ?? 0}         sub="≥90, price filled"                          color="text-success"     loading={pipelineLoading} />
+            </Link>
           </div>
 
           {/* ── Running progress banner ──────────────────────────────────────── */}
@@ -494,7 +490,7 @@ export default function Dashboard() {
                   {[
                     { label: 'Shopify Ready',   value: readyCount,   total: totalScraped, color: 'bg-success', icon: CheckCircle2, iconCls: 'text-success' },
                     { label: 'Review Required', value: reviewCount,  total: totalScraped, color: 'bg-warning', icon: AlertTriangle, iconCls: 'text-warning' },
-                    { label: 'Partial / Raw',   value: qualityStats?.partial ?? 0, total: totalScraped, color: 'bg-destructive', icon: XCircle, iconCls: 'text-destructive' },
+                    { label: 'Partial / Raw',   value: pipeline?.partialRaw ?? 0, total: totalScraped, color: 'bg-destructive', icon: XCircle, iconCls: 'text-destructive' },
                   ].map(row => {
                     const pct = totalScraped > 0 ? Math.round((row.value / totalScraped) * 100) : 0;
                     return (
