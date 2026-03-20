@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import PriceChanges from "./pages/PriceChanges";
 import Export from "./pages/Export";
+import Diagnostics from "./pages/Diagnostics";
 import SettingsPage from "./pages/Settings";
 import StoreDetail from "./pages/StoreDetail";
 import Auth from "./pages/Auth";
