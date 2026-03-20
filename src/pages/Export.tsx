@@ -98,9 +98,9 @@ function ProductReviewTable() {
   const totalPages = Math.ceil(total / 30);
 
   function confidenceBadge(score: number) {
-    if (score >= 90) return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-200 text-[10px] py-0">Ready ({score})</Badge>;
-    if (score >= 60) return <Badge className="bg-amber-100 text-amber-800 border-amber-200 text-[10px] py-0">Review ({score})</Badge>;
-    return <Badge className="bg-red-100 text-red-800 border-red-200 text-[10px] py-0">Partial ({score})</Badge>;
+    if (score >= 90) return <Badge variant="outline" className="text-[10px] py-0 text-primary border-primary/40">Ready ({score})</Badge>;
+    if (score >= 60) return <Badge variant="outline" className="text-[10px] py-0 text-muted-foreground">Review ({score})</Badge>;
+    return <Badge variant="destructive" className="text-[10px] py-0">Partial ({score})</Badge>;
   }
 
   return (
