@@ -41,6 +41,7 @@ const NAV_SECTIONS = [
     items: [
       { to: '/export', icon: Download, label: 'Exports', end: false },
       { to: '/diagnostics', icon: Stethoscope, label: 'Diagnostics', end: false },
+      { to: '/scraping-audit', icon: SearchCode, label: 'Scraping Audit', end: false },
     ],
   },
   {
