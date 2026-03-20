@@ -18,10 +18,10 @@ import { toast } from 'sonner';
 
 // ─── Data Quality Panel ──────────────────────────────────────────────────────
 function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
-  const { data: stats, isLoading } = useDataQualityStats();
+  const { data: stats, isLoading } = usePipelineStats();
   const enrichMutation = useEnrichProducts();
 
-  const total = stats?.total ?? 0;
+  const total = stats?.discovered ?? 0;
   const pct = (n: number) => total > 0 ? Math.round((n / total) * 100) : 0;
 
   function Bar({ value, max, color }: { value: number; max: number; color: string }) {
@@ -42,13 +42,13 @@ function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
 
       <div className="space-y-2.5">
         <div className="flex items-center gap-3 text-xs">
-          <span className="text-muted-foreground w-32 shrink-0">Total scraped</span>
+          <span className="text-muted-foreground w-32 shrink-0">Total discovered</span>
           <span className="font-semibold tabular-nums">{total.toLocaleString()}</span>
         </div>
         {[
-          { label: 'Shopify Ready', value: stats?.ready ?? 0, color: 'bg-primary', icon: <CheckCircle2 className="w-3 h-3 text-primary" /> },
-          { label: 'Review Needed', value: stats?.review ?? 0, color: 'bg-warning', icon: <AlertTriangle className="w-3 h-3 text-warning" /> },
-          { label: 'Partial / Raw', value: stats?.partial ?? 0, color: 'bg-destructive', icon: <XCircle className="w-3 h-3 text-destructive" /> },
+          { label: 'Shopify Ready',  value: stats?.readyCount ?? 0,    color: 'bg-primary',     icon: <CheckCircle2 className="w-3 h-3 text-primary" /> },
+          { label: 'Review Needed',  value: stats?.reviewRequired ?? 0, color: 'bg-warning',     icon: <AlertTriangle className="w-3 h-3 text-warning" /> },
+          { label: 'Partial / Raw',  value: stats?.partialRaw ?? 0,    color: 'bg-destructive',  icon: <XCircle className="w-3 h-3 text-destructive" /> },
         ].map(row => (
           <div key={row.label} className="flex items-center gap-3 text-xs">
             <span className="text-muted-foreground w-32 shrink-0 flex items-center gap-1">{row.icon}{row.label}</span>
@@ -64,6 +64,11 @@ function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
         <div className="flex justify-between"><span>Missing image</span><span className="font-medium text-foreground">{stats?.missingImage ?? 0}</span></div>
         <div className="flex justify-between"><span>Missing description</span><span className="font-medium text-foreground">{stats?.missingDescription ?? 0}</span></div>
         <div className="flex justify-between"><span>Detail page failed</span><span className="font-medium text-foreground">{stats?.detailFailed ?? 0}</span></div>
+      </div>
+
+      <div className="rounded-lg bg-muted/50 border border-border p-3 text-xs text-muted-foreground flex gap-2">
+        <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+        <span>Export button counts below are derived from this same data. No discrepancy.</span>
       </div>
 
       <Button
