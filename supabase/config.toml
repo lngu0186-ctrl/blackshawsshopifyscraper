@@ -11,3 +11,7 @@ verify_jwt = false
 
 [functions.cancel-scrape]
 verify_jwt = false
+
+[functions.auth-store]
+verify_jwt = false
+

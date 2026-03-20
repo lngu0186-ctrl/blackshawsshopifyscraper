@@ -8,7 +8,16 @@ export const StoreSchema = z.object({
   normalized_url: z.string(),
   myshopify_domain: z.string().nullable(),
   enabled: z.boolean(),
-  validation_status: z.enum(['valid', 'invalid', 'pending']),
+  validation_status: z.enum(['valid', 'restricted', 'password_protected', 'invalid', 'unchecked']),
+  scrape_strategy: z.string().default('products_json'),
+  requires_auth: z.boolean().default(false),
+  auth_type: z.string().default('none'),
+  auth_status: z.string().default('none'),
+  auth_cookie: z.string().nullable().optional(),
+  auth_cookie_expires_at: z.string().nullable().optional(),
+  last_auth_attempt_at: z.string().nullable().optional(),
+  storefront_password_hint: z.string().nullable().optional(),
+  auth_email: z.string().nullable().optional(),
   last_scraped_at: z.string().nullable(),
   total_products: z.number(),
   created_at: z.string(),
@@ -73,6 +82,9 @@ export const SettingsSchema = z.object({
   maxProductsPerStore: z.number().min(0).default(0),
   defaultExportScope: z.enum(['all', 'selected', 'single']).default('all'),
   googleShoppingCondition: z.boolean().default(false),
+  userAgent: z.string().default('Mozilla/5.0 (compatible; AUPharmacyScout/1.0)'),
+  tierTimeout: z.number().min(5).max(120).default(30),
+  reAuthBeforeEachScrape: z.boolean().default(false),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 

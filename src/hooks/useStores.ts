@@ -27,9 +27,10 @@ export function useAddStore() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ name, normalizedUrl, validationStatus, myshopifyDomain, url }: {
+    mutationFn: async ({ name, normalizedUrl, validationStatus, myshopifyDomain, url, scrapeStrategy, requiresAuth, authType }: {
       name: string; normalizedUrl: string; url: string;
       validationStatus: string; myshopifyDomain?: string;
+      scrapeStrategy?: string; requiresAuth?: boolean; authType?: string;
     }) => {
       const { data, error } = await supabase.from('stores').insert({
         user_id: user!.id,
@@ -39,6 +40,10 @@ export function useAddStore() {
         myshopify_domain: myshopifyDomain || null,
         enabled: true,
         validation_status: validationStatus,
+        scrape_strategy: scrapeStrategy || 'products_json',
+        requires_auth: requiresAuth || false,
+        auth_type: authType || 'none',
+        auth_status: 'none',
       }).select().single();
       if (error) throw error;
       return data;
@@ -124,10 +129,51 @@ export function useValidateStore() {
       if (!res.ok) throw new Error(await res.text());
       return res.json() as Promise<{
         valid: boolean;
+        scrape_strategy: string;
+        validation_status: string;
+        requires_auth: boolean;
+        auth_type?: string;
         normalized_url: string;
         myshopify_domain?: string;
+        message: string;
         error?: string;
       }>;
     },
+  });
+}
+
+export function useAuthStore() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (params: {
+      store_id: string;
+      url: string;
+      auth_type: string;
+      password?: string;
+      email?: string;
+    }) => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('Not authenticated');
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
+      const res = await fetch(`${supabaseUrl}/functions/v1/auth-store`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(params),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      return res.json() as Promise<{
+        success: boolean;
+        auth_status: string;
+        scrape_strategy?: string;
+        message: string;
+      }>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['stores'] });
+    },
+    onError: (e: any) => toast.error(e.message || 'Authentication failed'),
   });
 }
