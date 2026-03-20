@@ -71,15 +71,15 @@ function coverageFlag(row: StoreAuditRow): { icon: React.ReactNode; label: strin
     return { icon: <XCircle className="w-4 h-4" />, label: 'All confidence=0 — pipeline broken', color: 'text-destructive' };
   }
   if ((row.img_miss_pct ?? 0) > 50 || (row.desc_miss_pct ?? 0) > 50) {
-    return { icon: <AlertTriangle className="w-4 h-4" />, label: 'Partial — detail fetch likely failed', color: 'text-amber-600' };
+    return { icon: <AlertTriangle className="w-4 h-4" />, label: 'Partial — detail fetch likely failed', color: 'text-warning' };
   }
   if (row.review_req > row.ready || row.err_events > 0 || (row.img_miss_pct ?? 0) > 15) {
-    return { icon: <AlertTriangle className="w-4 h-4" />, label: 'Partial coverage suspected', color: 'text-amber-600' };
+    return { icon: <AlertTriangle className="w-4 h-4" />, label: 'Partial coverage suspected', color: 'text-warning' };
   }
   if (row.categories <= 1 && row.db_products > 50) {
-    return { icon: <AlertTriangle className="w-4 h-4" />, label: 'Partial — single collection URL', color: 'text-amber-600' };
+    return { icon: <AlertTriangle className="w-4 h-4" />, label: 'Partial — single collection URL', color: 'text-warning' };
   }
-  return { icon: <CheckCircle2 className="w-4 h-4" />, label: 'Full coverage likely', color: 'text-emerald-600' };
+  return { icon: <CheckCircle2 className="w-4 h-4" />, label: 'Full coverage likely', color: 'text-success' };
 }
 
 // ─── Queries ─────────────────────────────────────────────────────────────────
@@ -365,24 +365,24 @@ function Part1({ rows }: { rows: StoreAuditRow[] }) {
                             <ul className="space-y-0.5">
                               {issues.map((iss, i) => (
                                 <li key={i} className="text-xs text-foreground flex items-start gap-1.5">
-                                  <Bug className="w-3 h-3 text-amber-500 shrink-0 mt-0.5" /> {iss}
+                                  <Bug className="w-3 h-3 text-warning shrink-0 mt-0.5" /> {iss}
                                 </li>
                               ))}
                             </ul>
                           </div>
                         ) : (
-                          <p className="text-xs text-emerald-600">No issues detected for this store.</p>
+                          <p className="text-xs text-success">No issues detected for this store.</p>
                         )}
                         <div className="grid grid-cols-3 gap-4 text-xs">
                           <div>
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Platform</p>
-                            <p className={cn((!row.platform || row.platform === 'unknown') ? 'text-amber-600' : 'text-foreground')}>
+                            <p className={cn((!row.platform || row.platform === 'unknown') ? 'text-warning' : 'text-foreground')}>
                               {row.platform ?? 'unknown'} {(!row.platform || row.platform === 'unknown') && '⚠ not detected'}
                             </p>
                           </div>
                           <div>
                             <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Scrapeability score</p>
-                            <p className={cn(!row.scrapeability_score ? 'text-amber-600' : 'text-foreground')}>
+                            <p className={cn(!row.scrapeability_score ? 'text-warning' : 'text-foreground')}>
                               {row.scrapeability_score ?? 0} / 100 {!row.scrapeability_score && '⚠ qualification not run'}
                             </p>
                           </div>
@@ -430,10 +430,10 @@ function Part2({ storeRows, catRows }: { storeRows: StoreAuditRow[]; catRows: Ca
       {/* Summary cards */}
       <div className="grid grid-cols-4 gap-3">
         {[
-          { label: 'Stores with products but 0 categories', value: zeroCategories.length, color: zeroCategories.length > 0 ? 'text-amber-600' : 'text-emerald-600', note: 'product_type not set' },
-          { label: 'Stores with only 1 category (>30 products)', value: singleCategory.length, color: singleCategory.length > 0 ? 'text-amber-600' : 'text-emerald-600', note: 'single-collection URL suspected' },
-          { label: 'Category rows with <5 products', value: lowCountCats.length, color: lowCountCats.length > 5 ? 'text-amber-600' : 'text-muted-foreground', note: 'may indicate incomplete pagination' },
-          { label: 'Category normalisation conflicts', value: normIssues.length, color: normIssues.length > 0 ? 'text-amber-600' : 'text-emerald-600', note: 'same name, different case' },
+          { label: 'Stores with products but 0 categories', value: zeroCategories.length, color: zeroCategories.length > 0 ? 'text-warning' : 'text-success', note: 'product_type not set' },
+          { label: 'Stores with only 1 category (>30 products)', value: singleCategory.length, color: singleCategory.length > 0 ? 'text-warning' : 'text-success', note: 'single-collection URL suspected' },
+          { label: 'Category rows with <5 products', value: lowCountCats.length, color: lowCountCats.length > 5 ? 'text-warning' : 'text-muted-foreground', note: 'may indicate incomplete pagination' },
+          { label: 'Category normalisation conflicts', value: normIssues.length, color: normIssues.length > 0 ? 'text-warning' : 'text-success', note: 'same name, different case' },
         ].map(c => (
           <div key={c.label} className="rounded-lg border border-border p-3 bg-card">
             <p className={cn('text-2xl font-bold tabular-nums', c.color)}>{c.value}</p>
@@ -447,7 +447,7 @@ function Part2({ storeRows, catRows }: { storeRows: StoreAuditRow[]; catRows: Ca
       {zeroCategories.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
             Stores with products but no category recorded
           </h3>
           <p className="text-xs text-muted-foreground mb-2">
@@ -483,7 +483,7 @@ function Part2({ storeRows, catRows }: { storeRows: StoreAuditRow[]; catRows: Ca
       {normIssues.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
             Category normalisation conflicts
           </h3>
           <p className="text-xs text-muted-foreground mb-2">
@@ -506,7 +506,7 @@ function Part2({ storeRows, catRows }: { storeRows: StoreAuditRow[]; catRows: Ca
                     <TableCell>
                       <div className="flex flex-wrap gap-1">
                         {n.variants.map(v => (
-                          <span key={v} className="text-[10px] font-mono bg-amber-50 border border-amber-200 text-amber-800 px-1 py-0.5 rounded">{v}</span>
+                          <span key={v} className="text-[10px] font-mono bg-warning/5 border border-warning/30 text-warning px-1 py-0.5 rounded">{v}</span>
                         ))}
                       </div>
                     </TableCell>
@@ -525,12 +525,12 @@ function Part2({ storeRows, catRows }: { storeRows: StoreAuditRow[]; catRows: Ca
 function Part3({ storeRows }: { storeRows: StoreAuditRow[] }) {
   return (
     <div className="space-y-4">
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
+      <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
         <div className="flex items-start gap-2">
-          <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <AlertTriangle className="w-4 h-4 text-warning shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-semibold text-amber-900">Pagination depth is not tracked</p>
-            <p className="text-xs text-amber-800 mt-1">
+            <p className="text-sm font-semibold text-foreground">Pagination depth is not tracked</p>
+            <p className="text-xs text-warning mt-1">
               The current scraper does not persist per-page visit counts, per-category page depth, or 
               cursor state per run. The <code className="font-mono text-xs">scrape_runs</code> table has no 
               page_count column and <code className="font-mono text-xs">scraper_events</code> records 
@@ -718,7 +718,7 @@ function Part5({ storeRows }: { storeRows: StoreAuditRow[] }) {
                     <TableCell><Badge variant="outline" className="text-[10px]">{s.store_status}</Badge></TableCell>
                     <TableCell><span className="font-mono text-[10px] bg-muted px-1 py-0.5 rounded">{s.scrape_strategy}</span></TableCell>
                     <TableCell className="text-xs text-muted-foreground">{s.last_scraped_at ? new Date(s.last_scraped_at).toLocaleDateString('en-AU') : 'Never'}</TableCell>
-                    <TableCell className="text-xs tabular-nums">{s.events || <span className="text-amber-600">0 ⚠</span>}</TableCell>
+                    <TableCell className="text-xs tabular-nums">{s.events || <span className="text-warning">0 ⚠</span>}</TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {s.last_scraped_at && s.events > 0 ? 'Scraped but returned 0 products — site may use non-standard format'
                         : s.last_scraped_at ? 'Scraped with no events logged — silent failure'
@@ -736,7 +736,7 @@ function Part5({ storeRows }: { storeRows: StoreAuditRow[] }) {
       {noEvents.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
             Stores with products in DB but zero scraper_events — diagnostic blind spots
           </h3>
           <p className="text-xs text-muted-foreground mb-2">
@@ -793,11 +793,11 @@ function Part6({ storeRows }: { storeRows: StoreAuditRow[] }) {
   return (
     <div className="space-y-6">
       {/* Platform detection status */}
-      <div className="rounded-lg border border-amber-200 bg-amber-50 p-4">
-        <p className="text-sm font-semibold text-amber-900 mb-1 flex items-center gap-2">
+      <div className="rounded-lg border border-warning/30 bg-warning/5 p-4">
+        <p className="text-sm font-semibold text-foreground mb-1 flex items-center gap-2">
           <AlertTriangle className="w-4 h-4" /> Platform detection has not been persisted for any store
         </p>
-        <p className="text-xs text-amber-800">
+        <p className="text-xs text-warning">
           All {totalStores} stores have <code className="font-mono text-xs bg-white/60 px-1 rounded">platform = "unknown"</code>.
           The validate-store edge function runs platform detection, but results are not being saved to the 
           <code className="font-mono text-xs bg-white/60 px-1 rounded mx-1">platform</code> column of existing stores.
@@ -813,7 +813,7 @@ function Part6({ storeRows }: { storeRows: StoreAuditRow[] }) {
           </h3>
           <div className="space-y-2 text-xs">
             <div className="flex items-start gap-2">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-0.5" />
+              <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
               <span><strong>/products.json?page=N</strong> — used by all <code className="font-mono bg-muted px-1 rounded">{productsJsonStores.length}</code> stores using products_json strategy. Most reliable Shopify method.</span>
             </div>
             <div className="flex items-start gap-2">
@@ -825,7 +825,7 @@ function Part6({ storeRows }: { storeRows: StoreAuditRow[] }) {
               <span><strong>Cursor-based pagination</strong> (page_info) — code exists in scrape-source but the primary scrape-store function uses numeric page pagination only.</span>
             </div>
             <div className="flex items-start gap-2">
-              <AlertTriangle className="w-3.5 h-3.5 text-amber-500 shrink-0 mt-0.5" />
+              <AlertTriangle className="w-3.5 h-3.5 text-warning shrink-0 mt-0.5" />
               <span><strong>Single-collection URL stores</strong> — BellaCorp and Better Value Pharmacy were added with collection-specific URLs. Only that collection is scraped. Other collections on the same site are missed.</span>
             </div>
           </div>
@@ -927,11 +927,11 @@ function Part7({ storeRows }: { storeRows: StoreAuditRow[] }) {
         <div className="space-y-3">
           {critical.map(c => (
             <div key={c.priority} className={cn('rounded-lg border p-4',
-              c.severity === 'critical' ? 'border-destructive/30 bg-destructive/5' : 'border-amber-200 bg-amber-50'
+              c.severity === 'critical' ? 'border-destructive/30 bg-destructive/5' : 'border-warning/30 bg-warning/5'
             )}>
               <div className="flex items-start gap-3">
                 <div className={cn('w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0',
-                  c.severity === 'critical' ? 'bg-destructive text-destructive-foreground' : 'bg-amber-500 text-white'
+                  c.severity === 'critical' ? 'bg-destructive text-destructive-foreground' : 'bg-warning/50 text-white'
                 )}>
                   {c.priority}
                 </div>
@@ -970,7 +970,7 @@ function Part7({ storeRows }: { storeRows: StoreAuditRow[] }) {
         {/* Needs detail page fix */}
         <div>
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Stores needing detail page fix
+            <AlertTriangle className="w-3.5 h-3.5 text-warning" /> Stores needing detail page fix
           </h3>
           {detailFetchNeeded.length === 0
             ? <p className="text-xs text-muted-foreground">All stores have &lt;30% missing fields.</p>
@@ -988,7 +988,7 @@ function Part7({ storeRows }: { storeRows: StoreAuditRow[] }) {
         {/* Single collection URL issues */}
         <div>
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2">
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Stores with single-collection URL scope
+            <AlertTriangle className="w-3.5 h-3.5 text-warning" /> Stores with single-collection URL scope
           </h3>
           {categoryIssues.length === 0
             ? <p className="text-xs text-muted-foreground">None identified.</p>
@@ -1045,11 +1045,11 @@ export default function ScrapingAudit() {
   }).length;
   const partialFlags = storeRows.filter(s => {
     const f = coverageFlag(s);
-    return f.color === 'text-amber-600';
+    return f.color === 'text-warning';
   }).length;
   const okFlags = storeRows.filter(s => {
     const f = coverageFlag(s);
-    return f.color === 'text-emerald-600';
+    return f.color === 'text-success';
   }).length;
 
   return (
@@ -1073,8 +1073,8 @@ export default function ScrapingAudit() {
           {[
             { label: 'Total stores', value: storeRows.length, sub: 'in database' },
             { label: 'Total products', value: totalProducts.toLocaleString(), sub: 'products table' },
-            { label: '✅ Full coverage', value: okFlags, sub: 'stores', color: 'text-emerald-600' },
-            { label: '⚠️ Partial coverage', value: partialFlags, sub: 'stores', color: 'text-amber-600' },
+            { label: '✅ Full coverage', value: okFlags, sub: 'stores', color: 'text-success' },
+            { label: '⚠️ Partial coverage', value: partialFlags, sub: 'stores', color: 'text-warning' },
             { label: '❌ Failed/broken', value: criticalFlags, sub: 'stores', color: 'text-destructive' },
             { label: 'Total events', value: totalEvents, sub: `${storeRows.filter(s => s.events === 0 && s.db_products > 0).length} stores have none` },
           ].map(k => (
