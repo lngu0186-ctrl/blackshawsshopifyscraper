@@ -241,8 +241,8 @@ function PctBar({ pct, warn = 20, crit = 50 }: { pct: number | null; warn?: numb
 
 function ConfBadge({ score }: { score: number | null }) {
   if (score === null) return <span className="text-xs text-muted-foreground italic">N/A</span>;
-  const cls = score >= 80 ? 'text-emerald-700 bg-emerald-50 border-emerald-200'
-    : score >= 50 ? 'text-amber-700 bg-amber-50 border-amber-200'
+  const cls = score >= 80 ? 'text-success bg-success/10 border-success/30'
+    : score >= 50 ? 'text-warning bg-warning/10 border-warning/30'
     : 'text-destructive bg-destructive/5 border-destructive/20';
   return (
     <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[11px] font-bold border tabular-nums', cls)}>
