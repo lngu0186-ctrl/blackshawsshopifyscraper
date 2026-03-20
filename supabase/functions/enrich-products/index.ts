@@ -394,7 +394,7 @@ Deno.serve(async (req) => {
     const { count: remaining } = await supabaseAdmin
       .from('scraped_products')
       .select('id', { count: 'exact', head: true })
-      .eq('user_id', user.id)
+      .eq('user_id', userId)
       .eq('detail_scraped', false)
       .lt('detail_fetch_attempts', 3)
       .eq('source_key', source_key ?? '');
