@@ -45,8 +45,8 @@ function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
           <span className="font-semibold tabular-nums">{total.toLocaleString()}</span>
         </div>
         {[
-          { label: 'Shopify Ready', value: stats?.ready ?? 0, color: 'bg-emerald-500', icon: <CheckCircle2 className="w-3 h-3 text-emerald-500" /> },
-          { label: 'Review Needed', value: stats?.review ?? 0, color: 'bg-amber-500', icon: <AlertTriangle className="w-3 h-3 text-amber-500" /> },
+          { label: 'Shopify Ready', value: stats?.ready ?? 0, color: 'bg-primary', icon: <CheckCircle2 className="w-3 h-3 text-primary" /> },
+          { label: 'Review Needed', value: stats?.review ?? 0, color: 'bg-warning', icon: <AlertTriangle className="w-3 h-3 text-warning" /> },
           { label: 'Partial / Raw', value: stats?.partial ?? 0, color: 'bg-destructive', icon: <XCircle className="w-3 h-3 text-destructive" /> },
         ].map(row => (
           <div key={row.label} className="flex items-center gap-3 text-xs">
