@@ -55,7 +55,7 @@ export function useExport() {
       // Log export run
       await supabase.from('export_runs').insert({
         user_id: user!.id,
-        scope: storeIds ? 'selected' : 'all',
+        scope: productIds ? 'selected' : storeIds ? 'selected' : 'all',
         store_ids: storeIds ? storeIds : null,
         changed_only: changedOnly ?? false,
         export_type: 'shopify_csv',
@@ -63,9 +63,9 @@ export function useExport() {
       });
 
       // Update last_exported_at
-      const productIds = products.map((p: any) => p.id);
+      const exportedIds = products.map((p: any) => p.id);
       await supabase.from('products').update({ last_exported_at: new Date().toISOString() })
-        .in('id', productIds);
+        .in('id', exportedIds);
 
       queryClient.invalidateQueries({ queryKey: ['products'] });
       toast.success(`Exported ${rows.length} rows`);
