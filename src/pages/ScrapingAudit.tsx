@@ -218,8 +218,8 @@ function useEventSummary() {
 // ─── Sub-components ──────────────────────────────────────────────────────────
 function SeverityBadge({ sev }: { sev: string }) {
   const cls = sev === 'critical' ? 'bg-destructive/10 text-destructive border-destructive/30'
-    : sev === 'error' ? 'bg-destructive/8 text-destructive/80 border-destructive/20'
-    : sev === 'warning' ? 'bg-amber-500/10 text-amber-700 border-amber-400/30'
+    : sev === 'error' ? 'bg-destructive/10 text-destructive/80 border-destructive/20'
+    : sev === 'warning' ? 'bg-warning/10 text-warning border-warning/30'
     : 'bg-muted text-muted-foreground border-border';
   return <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold border', cls)}>{sev}</span>;
 }
