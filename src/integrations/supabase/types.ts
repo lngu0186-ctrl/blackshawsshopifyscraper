@@ -185,17 +185,20 @@ export type Database = {
           body_plain: string | null
           compare_at_price_max: number | null
           compare_at_price_min: number | null
+          confidence_score: number
           content_hash: string | null
           created_at: string
           first_seen_at: string
           handle: string
           id: string
           images: Json | null
+          issue_flags: string[]
           last_changed_at: string | null
           last_exported_at: string | null
           options: Json | null
           price_max: number | null
           price_min: number | null
+          product_scrape_status: string
           product_type: string | null
           published: boolean
           raw_product: Json | null
@@ -221,17 +224,20 @@ export type Database = {
           body_plain?: string | null
           compare_at_price_max?: number | null
           compare_at_price_min?: number | null
+          confidence_score?: number
           content_hash?: string | null
           created_at?: string
           first_seen_at?: string
           handle: string
           id?: string
           images?: Json | null
+          issue_flags?: string[]
           last_changed_at?: string | null
           last_exported_at?: string | null
           options?: Json | null
           price_max?: number | null
           price_min?: number | null
+          product_scrape_status?: string
           product_type?: string | null
           published?: boolean
           raw_product?: Json | null
@@ -257,17 +263,20 @@ export type Database = {
           body_plain?: string | null
           compare_at_price_max?: number | null
           compare_at_price_min?: number | null
+          confidence_score?: number
           content_hash?: string | null
           created_at?: string
           first_seen_at?: string
           handle?: string
           id?: string
           images?: Json | null
+          issue_flags?: string[]
           last_changed_at?: string | null
           last_exported_at?: string | null
           options?: Json | null
           price_max?: number | null
           price_min?: number | null
+          product_scrape_status?: string
           product_type?: string | null
           published?: boolean
           raw_product?: Json | null
@@ -574,6 +583,7 @@ export type Database = {
           error_count: number
           finished_at: string | null
           id: string
+          run_status: string
           settings: Json | null
           started_at: string | null
           status: string
@@ -589,6 +599,7 @@ export type Database = {
           error_count?: number
           finished_at?: string | null
           id?: string
+          run_status?: string
           settings?: Json | null
           started_at?: string | null
           status?: string
@@ -604,6 +615,7 @@ export type Database = {
           error_count?: number
           finished_at?: string | null
           id?: string
+          run_status?: string
           settings?: Json | null
           started_at?: string | null
           status?: string
@@ -643,6 +655,7 @@ export type Database = {
           in_stock: boolean | null
           is_approved: boolean
           is_manually_edited: boolean
+          issue_flags: string[]
           last_exported_at: string | null
           listing_scraped: boolean
           missing_fields: string[]
@@ -651,6 +664,7 @@ export type Database = {
           override_fields: Json | null
           price: number | null
           price_text: string | null
+          product_scrape_status: string
           raw_detail: Json | null
           raw_identifiers: Json | null
           raw_listing: Json | null
@@ -696,6 +710,7 @@ export type Database = {
           in_stock?: boolean | null
           is_approved?: boolean
           is_manually_edited?: boolean
+          issue_flags?: string[]
           last_exported_at?: string | null
           listing_scraped?: boolean
           missing_fields?: string[]
@@ -704,6 +719,7 @@ export type Database = {
           override_fields?: Json | null
           price?: number | null
           price_text?: string | null
+          product_scrape_status?: string
           raw_detail?: Json | null
           raw_identifiers?: Json | null
           raw_listing?: Json | null
@@ -749,6 +765,7 @@ export type Database = {
           in_stock?: boolean | null
           is_approved?: boolean
           is_manually_edited?: boolean
+          issue_flags?: string[]
           last_exported_at?: string | null
           listing_scraped?: boolean
           missing_fields?: string[]
@@ -757,6 +774,7 @@ export type Database = {
           override_fields?: Json | null
           price?: number | null
           price_text?: string | null
+          product_scrape_status?: string
           raw_detail?: Json | null
           raw_identifiers?: Json | null
           raw_listing?: Json | null
@@ -874,6 +892,7 @@ export type Database = {
           normalized_url: string
           requires_auth: boolean
           scrape_strategy: string
+          store_status: string
           storefront_password: string | null
           storefront_password_hint: string | null
           total_products: number
@@ -907,6 +926,7 @@ export type Database = {
           normalized_url: string
           requires_auth?: boolean
           scrape_strategy?: string
+          store_status?: string
           storefront_password?: string | null
           storefront_password_hint?: string | null
           total_products?: number
@@ -940,6 +960,7 @@ export type Database = {
           normalized_url?: string
           requires_auth?: boolean
           scrape_strategy?: string
+          store_status?: string
           storefront_password?: string | null
           storefront_password_hint?: string | null
           total_products?: number
