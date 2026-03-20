@@ -29,18 +29,20 @@ export function AddStoreModal({ open, onOpenChange }: Props) {
     const result = await validateStore.mutateAsync(data.url).catch(e => ({ valid: false, error: e.message }));
 
     if (!result.valid) {
-      setValidationResult({ valid: false, message: result.error || 'This URL does not appear to expose a public Shopify products.json endpoint.' });
+      const msg = (result as any).error || 'This URL does not appear to expose a public Shopify products.json endpoint.';
+      setValidationResult({ valid: false, message: msg });
       return;
     }
 
     setValidationResult({ valid: true });
+    const validResult = result as { valid: boolean; normalized_url: string; myshopify_domain?: string };
 
     await addStore.mutateAsync({
       name: data.name,
       url: data.url,
-      normalizedUrl: result.normalized_url || normalizeUrl(data.url),
+      normalizedUrl: validResult.normalized_url || normalizeUrl(data.url),
       validationStatus: 'valid',
-      myshopifyDomain: result.myshopify_domain,
+      myshopifyDomain: validResult.myshopify_domain,
     });
 
     reset();
