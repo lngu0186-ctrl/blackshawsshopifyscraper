@@ -15,6 +15,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import type { Settings } from '@/types/schemas';
 
+const DEFAULT_USER_AGENT = 'Mozilla/5.0 (compatible; AUPharmacyScout/1.0)';
+
 export default function SettingsPage() {
   const { user } = useAuth();
   const [settings, setSettings] = useState<Settings>(getSettings());
@@ -76,6 +78,45 @@ export default function SettingsPage() {
           <Input type="number" min={0} className="h-9 text-sm"
             value={settings.maxProductsPerStore}
             onChange={e => setSettings(s => ({ ...s, maxProductsPerStore: parseInt(e.target.value) || 0 }))} />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">Tier timeout (seconds per request): {settings.tierTimeout ?? 30}</Label>
+          <Slider min={5} max={120} step={5} value={[settings.tierTimeout ?? 30]}
+            onValueChange={([v]) => setSettings(s => ({ ...s, tierTimeout: v }))} />
+        </div>
+
+        <div className="space-y-1.5">
+          <Label className="text-xs">Custom User-Agent</Label>
+          <div className="flex gap-2">
+            <Input
+              type="text"
+              className="h-9 text-sm font-mono"
+              value={settings.userAgent ?? DEFAULT_USER_AGENT}
+              onChange={e => setSettings(s => ({ ...s, userAgent: e.target.value }))}
+              placeholder={DEFAULT_USER_AGENT}
+            />
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 shrink-0 text-xs"
+              onClick={() => setSettings(s => ({ ...s, userAgent: DEFAULT_USER_AGENT }))}
+            >
+              Reset
+            </Button>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3">
+          <Switch
+            id="reauth"
+            checked={settings.reAuthBeforeEachScrape ?? false}
+            onCheckedChange={v => setSettings(s => ({ ...s, reAuthBeforeEachScrape: v }))}
+          />
+          <Label htmlFor="reauth" className="text-sm cursor-pointer">
+            Re-authenticate before each scrape (default: only re-auth if session expired)
+          </Label>
         </div>
       </div>
 

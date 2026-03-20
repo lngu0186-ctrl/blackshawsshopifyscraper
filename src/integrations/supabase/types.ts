@@ -454,13 +454,25 @@ export type Database = {
       }
       stores: {
         Row: {
+          auth_cookie: string | null
+          auth_cookie_expires_at: string | null
+          auth_email: string | null
+          auth_password: string | null
+          auth_status: string
+          auth_token: string | null
+          auth_type: string
           created_at: string
           enabled: boolean
           id: string
+          last_auth_attempt_at: string | null
           last_scraped_at: string | null
           myshopify_domain: string | null
           name: string
           normalized_url: string
+          requires_auth: boolean
+          scrape_strategy: string
+          storefront_password: string | null
+          storefront_password_hint: string | null
           total_products: number
           updated_at: string
           url: string
@@ -468,13 +480,25 @@ export type Database = {
           validation_status: string
         }
         Insert: {
+          auth_cookie?: string | null
+          auth_cookie_expires_at?: string | null
+          auth_email?: string | null
+          auth_password?: string | null
+          auth_status?: string
+          auth_token?: string | null
+          auth_type?: string
           created_at?: string
           enabled?: boolean
           id?: string
+          last_auth_attempt_at?: string | null
           last_scraped_at?: string | null
           myshopify_domain?: string | null
           name: string
           normalized_url: string
+          requires_auth?: boolean
+          scrape_strategy?: string
+          storefront_password?: string | null
+          storefront_password_hint?: string | null
           total_products?: number
           updated_at?: string
           url: string
@@ -482,13 +506,25 @@ export type Database = {
           validation_status?: string
         }
         Update: {
+          auth_cookie?: string | null
+          auth_cookie_expires_at?: string | null
+          auth_email?: string | null
+          auth_password?: string | null
+          auth_status?: string
+          auth_token?: string | null
+          auth_type?: string
           created_at?: string
           enabled?: boolean
           id?: string
+          last_auth_attempt_at?: string | null
           last_scraped_at?: string | null
           myshopify_domain?: string | null
           name?: string
           normalized_url?: string
+          requires_auth?: boolean
+          scrape_strategy?: string
+          storefront_password?: string | null
+          storefront_password_hint?: string | null
           total_products?: number
           updated_at?: string
           url?: string
