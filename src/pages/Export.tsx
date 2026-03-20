@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useScrapedProducts, useDataQualityStats, useScrapeSource, useEnrichProducts, useCreateScrapeJob, type ExportMode } from '@/hooks/useScrapedProducts';
+import { useScrapedProducts, useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
+import { usePipelineStats } from '@/hooks/usePipelineStats';
 import { exportShopifyReadyCsv, exportReviewRequiredCsv } from '@/lib/csvExport';
 import { exportFullRawExcel } from '@/lib/xlsxExport';
 import { useExport } from '@/hooks/useExport';
@@ -11,7 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileText, FileSpreadsheet, History, Loader2, CheckCircle2, AlertTriangle, XCircle, RefreshCw, ExternalLink } from 'lucide-react';
+import { Download, FileText, FileSpreadsheet, History, Loader2, CheckCircle2, AlertTriangle, XCircle, RefreshCw, ExternalLink, Info } from 'lucide-react';
 import { SITE_ADAPTERS } from '@/lib/siteAdapters';
 import { toast } from 'sonner';
 
