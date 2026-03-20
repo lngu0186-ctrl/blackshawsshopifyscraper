@@ -265,16 +265,112 @@ export type Database = {
           },
         ]
       }
+      scrape_diagnostics: {
+        Row: {
+          ai_analysis: string | null
+          ai_recommendation: string | null
+          created_at: string
+          debug_payload: Json | null
+          duration_ms: number | null
+          extracted_value_preview: string | null
+          failure_reason: string | null
+          field_name: string | null
+          http_status: number | null
+          id: string
+          missing_fields: string[] | null
+          parser_used: string | null
+          raw_error: string | null
+          retry_count: number
+          scrape_job_id: string | null
+          selector_used: string | null
+          severity: string
+          source_key: string | null
+          stage: string
+          status: string
+          store_id: string | null
+          url: string | null
+          user_id: string
+        }
+        Insert: {
+          ai_analysis?: string | null
+          ai_recommendation?: string | null
+          created_at?: string
+          debug_payload?: Json | null
+          duration_ms?: number | null
+          extracted_value_preview?: string | null
+          failure_reason?: string | null
+          field_name?: string | null
+          http_status?: number | null
+          id?: string
+          missing_fields?: string[] | null
+          parser_used?: string | null
+          raw_error?: string | null
+          retry_count?: number
+          scrape_job_id?: string | null
+          selector_used?: string | null
+          severity?: string
+          source_key?: string | null
+          stage: string
+          status?: string
+          store_id?: string | null
+          url?: string | null
+          user_id: string
+        }
+        Update: {
+          ai_analysis?: string | null
+          ai_recommendation?: string | null
+          created_at?: string
+          debug_payload?: Json | null
+          duration_ms?: number | null
+          extracted_value_preview?: string | null
+          failure_reason?: string | null
+          field_name?: string | null
+          http_status?: number | null
+          id?: string
+          missing_fields?: string[] | null
+          parser_used?: string | null
+          raw_error?: string | null
+          retry_count?: number
+          scrape_job_id?: string | null
+          selector_used?: string | null
+          severity?: string
+          source_key?: string | null
+          stage?: string
+          status?: string
+          store_id?: string | null
+          url?: string | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scrape_diagnostics_scrape_job_id_fkey"
+            columns: ["scrape_job_id"]
+            isOneToOne: false
+            referencedRelation: "scrape_jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "scrape_diagnostics_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       scrape_jobs: {
         Row: {
           created_at: string
           error: string | null
           finished_at: string | null
           id: string
+          initiated_by: string | null
           job_type: string
           source_key: string
           started_at: string | null
           status: string
+          stores_included: number
+          stores_skipped: number
           total_discovered: number
           total_enriched: number
           total_failed: number
@@ -285,10 +381,13 @@ export type Database = {
           error?: string | null
           finished_at?: string | null
           id?: string
+          initiated_by?: string | null
           job_type?: string
           source_key: string
           started_at?: string | null
           status?: string
+          stores_included?: number
+          stores_skipped?: number
           total_discovered?: number
           total_enriched?: number
           total_failed?: number
@@ -299,10 +398,13 @@ export type Database = {
           error?: string | null
           finished_at?: string | null
           id?: string
+          initiated_by?: string | null
           job_type?: string
           source_key?: string
           started_at?: string | null
           status?: string
+          stores_included?: number
+          stores_skipped?: number
           total_discovered?: number
           total_enriched?: number
           total_failed?: number
@@ -629,11 +731,16 @@ export type Database = {
           auth_status: string
           auth_token: string | null
           auth_type: string
+          consecutive_failures: number
           created_at: string
           enabled: boolean
+          health_status: string
           id: string
           last_auth_attempt_at: string | null
+          last_failure_at: string | null
+          last_failure_reason: string | null
           last_scraped_at: string | null
+          last_success_at: string | null
           myshopify_domain: string | null
           name: string
           normalized_url: string
@@ -655,11 +762,16 @@ export type Database = {
           auth_status?: string
           auth_token?: string | null
           auth_type?: string
+          consecutive_failures?: number
           created_at?: string
           enabled?: boolean
+          health_status?: string
           id?: string
           last_auth_attempt_at?: string | null
+          last_failure_at?: string | null
+          last_failure_reason?: string | null
           last_scraped_at?: string | null
+          last_success_at?: string | null
           myshopify_domain?: string | null
           name: string
           normalized_url: string
@@ -681,11 +793,16 @@ export type Database = {
           auth_status?: string
           auth_token?: string | null
           auth_type?: string
+          consecutive_failures?: number
           created_at?: string
           enabled?: boolean
+          health_status?: string
           id?: string
           last_auth_attempt_at?: string | null
+          last_failure_at?: string | null
+          last_failure_reason?: string | null
           last_scraped_at?: string | null
+          last_success_at?: string | null
           myshopify_domain?: string | null
           name?: string
           normalized_url?: string
