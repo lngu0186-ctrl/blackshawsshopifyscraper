@@ -938,6 +938,7 @@ export type Database = {
       }
       stores: {
         Row: {
+          antibot_suspected: boolean | null
           auth_blocked_reason: string | null
           auth_cookie: string | null
           auth_cookie_expires_at: string | null
@@ -957,12 +958,22 @@ export type Database = {
           last_failure_reason: string | null
           last_scraped_at: string | null
           last_success_at: string | null
+          login_required: boolean | null
           myshopify_domain: string | null
           name: string
           normalized_url: string
+          platform: string | null
+          platform_confidence: string | null
+          qualification_notes: string | null
+          qualified_at: string | null
+          reachability_status: string | null
           requires_auth: boolean
           scrape_strategy: string
+          scrapeability_score: number | null
+          sitemap_found: boolean | null
+          sitemap_url: string | null
           store_status: string
+          store_type: string | null
           storefront_password: string | null
           storefront_password_hint: string | null
           total_products: number
@@ -972,6 +983,7 @@ export type Database = {
           validation_status: string
         }
         Insert: {
+          antibot_suspected?: boolean | null
           auth_blocked_reason?: string | null
           auth_cookie?: string | null
           auth_cookie_expires_at?: string | null
@@ -991,12 +1003,22 @@ export type Database = {
           last_failure_reason?: string | null
           last_scraped_at?: string | null
           last_success_at?: string | null
+          login_required?: boolean | null
           myshopify_domain?: string | null
           name: string
           normalized_url: string
+          platform?: string | null
+          platform_confidence?: string | null
+          qualification_notes?: string | null
+          qualified_at?: string | null
+          reachability_status?: string | null
           requires_auth?: boolean
           scrape_strategy?: string
+          scrapeability_score?: number | null
+          sitemap_found?: boolean | null
+          sitemap_url?: string | null
           store_status?: string
+          store_type?: string | null
           storefront_password?: string | null
           storefront_password_hint?: string | null
           total_products?: number
@@ -1006,6 +1028,7 @@ export type Database = {
           validation_status?: string
         }
         Update: {
+          antibot_suspected?: boolean | null
           auth_blocked_reason?: string | null
           auth_cookie?: string | null
           auth_cookie_expires_at?: string | null
@@ -1025,12 +1048,22 @@ export type Database = {
           last_failure_reason?: string | null
           last_scraped_at?: string | null
           last_success_at?: string | null
+          login_required?: boolean | null
           myshopify_domain?: string | null
           name?: string
           normalized_url?: string
+          platform?: string | null
+          platform_confidence?: string | null
+          qualification_notes?: string | null
+          qualified_at?: string | null
+          reachability_status?: string | null
           requires_auth?: boolean
           scrape_strategy?: string
+          scrapeability_score?: number | null
+          sitemap_found?: boolean | null
+          sitemap_url?: string | null
           store_status?: string
+          store_type?: string | null
           storefront_password?: string | null
           storefront_password_hint?: string | null
           total_products?: number
