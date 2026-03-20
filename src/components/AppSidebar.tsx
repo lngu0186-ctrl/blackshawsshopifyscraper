@@ -3,7 +3,7 @@ import { NavLink as RouterNavLink, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard, Store, TrendingDown, Download, Settings, Plus,
   Loader2, ToggleLeft, ToggleRight, Trash2, Pill,
-  ChevronDown, ChevronUp, LogOut,
+  ChevronDown, ChevronUp, LogOut, Lock, ShieldAlert,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -11,11 +11,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useStores, useUpdateStore, useDeleteStore, useSeedStores } from '@/hooks/useStores';
 import { useAuth } from '@/hooks/useAuth';
 import { AddStoreModal } from './AddStoreModal';
+import { StoreCredentialsModal } from './StoreCredentialsModal';
+import { StoreStrategyBadge } from './StoreStrategyBadge';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import type { Store as StoreType } from '@/types/schemas';
 
 const NAV_ITEMS = [
   { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
@@ -34,6 +37,16 @@ export function AppSidebar() {
   const { user, signOut } = useAuth();
   const [addOpen, setAddOpen] = useState(false);
   const [storesExpanded, setStoresExpanded] = useState(true);
+  const [credStore, setCredStore] = useState<StoreType | null>(null);
+
+  const getAuthBadgeColor = (store: StoreType) => {
+    if (!store.requires_auth) return '';
+    const cookieExpiry = store.auth_cookie_expires_at ? new Date(store.auth_cookie_expires_at) : null;
+    const isExpired = cookieExpiry ? cookieExpiry < new Date() : false;
+    if (store.auth_status === 'authenticated' && !isExpired) return 'text-green-500';
+    if (isExpired || store.auth_status === 'failed') return 'text-destructive';
+    return 'text-muted-foreground';
+  };
 
   return (
     <div className="flex flex-col h-full w-60 bg-sidebar border-r border-sidebar-border shrink-0">
@@ -94,16 +107,37 @@ export function AppSidebar() {
                 <div className="flex items-center gap-1.5 min-w-0">
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     store.enabled
-                      ? store.validation_status === 'valid' ? 'bg-primary' : 'bg-destructive'
+                      ? (store.validation_status === 'valid' || store.validation_status === 'restricted') ? 'bg-primary' : 'bg-destructive'
                       : 'bg-muted-foreground/40'
                   }`} />
                   <span className="text-[11px] text-sidebar-foreground truncate hover:text-sidebar-accent-foreground transition-colors">
                     {store.name}
                   </span>
+                  {/* Auth badge */}
+                  {store.requires_auth && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={e => { e.preventDefault(); e.stopPropagation(); setCredStore(store); }}
+                          className={`shrink-0 ${getAuthBadgeColor(store)}`}
+                        >
+                          {store.auth_type === 'customer_account'
+                            ? <ShieldAlert className="w-3 h-3" />
+                            : <Lock className="w-3 h-3" />}
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="right" className="text-xs">
+                        {store.auth_status === 'authenticated' ? 'Authenticated — click to update' : 'Needs credentials — click to add'}
+                      </TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
-                {store.total_products > 0 && (
-                  <p className="text-[10px] text-muted-foreground ml-3">{store.total_products.toLocaleString()}</p>
-                )}
+                <div className="flex items-center gap-1.5 ml-3 mt-0.5">
+                  {store.total_products > 0 && (
+                    <p className="text-[10px] text-muted-foreground">{store.total_products.toLocaleString()}</p>
+                  )}
+                  <StoreStrategyBadge store={store} />
+                </div>
               </RouterNavLink>
 
               {/* Actions (show on hover) */}
@@ -186,6 +220,13 @@ export function AppSidebar() {
       </div>
 
       <AddStoreModal open={addOpen} onOpenChange={setAddOpen} />
+      {credStore && (
+        <StoreCredentialsModal
+          store={credStore}
+          open={!!credStore}
+          onOpenChange={v => { if (!v) setCredStore(null); }}
+        />
+      )}
     </div>
   );
 }
