@@ -402,15 +402,29 @@ export default function Dashboard() {
       <div className="flex-1 overflow-y-auto">
         <div className="p-6 space-y-6 max-w-[1440px] mx-auto">
 
-          {/* ── KPI Cards ───────────────────────────────────────────────────── */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-            <KpiCard icon={Store}         label="Active Sources"    value={enabledStores.length}              sub={`of ${stores?.length ?? 0} total`}          color="text-primary"     loading={storesLoading} />
-            <KpiCard icon={Database}      label="Pages Crawled"     value={completedStores}                   sub={isRunning ? 'live' : 'last run'}            color="text-primary"     pulse={isRunning} />
-            <KpiCard icon={Package}       label="Products Found"    value={stats?.totalProducts ?? 0}         sub="all stores"                                  color="text-primary"     loading={statsLoading} />
-            <KpiCard icon={Zap}           label="Enriched"          value={qualityStats?.total ?? 0}          sub="detail fetched"                              color="text-success"     loading={qualityLoading} />
-            <KpiCard icon={CheckCircle2}  label="Export Ready"      value={readyCount}                        sub="≥90 confidence"                              color="text-success"     loading={qualityLoading} />
-            <KpiCard icon={AlertTriangle} label="Review Required"   value={reviewCount}                       sub="60–89 confidence"                            color="text-warning"     loading={qualityLoading} />
-            <KpiCard icon={Activity}      label="Price Changes"     value={stats?.totalChanges ?? 0}          sub="recorded"                                    color="text-destructive" loading={statsLoading} />
+          {/* ── KPI Cards — 7-cell pipeline breakdown ─────────────────────── */}
+          <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
+            <Link to="/products" className="block">
+              <KpiCard icon={Database}      label="Discovered"        value={totalScraped}                       sub="total scraped"                              color="text-primary"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?review_status=pending" className="block">
+              <KpiCard icon={Loader2}       label="Queued"            value={pipeline?.queued ?? 0}              sub="awaiting enrichment"                        color="text-primary"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products" className="block">
+              <KpiCard icon={Zap}           label="Enriched"          value={pipeline?.enriched ?? 0}            sub="detail fetched"                             color="text-success"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?scrape_status=failed" className="block">
+              <KpiCard icon={XCircle}       label="Failed"            value={pipeline?.failed ?? 0}              sub="scrape failed"                              color="text-destructive" loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?review_status=pending" className="block">
+              <KpiCard icon={AlertTriangle} label="Review Required"   value={reviewCount}                        sub="60–89 confidence"                           color="text-warning"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/products?auth_blocked=1" className="block">
+              <KpiCard icon={Store}         label="Auth Blocked"      value={pipeline?.authBlocked ?? 0}         sub="login required"                             color="text-warning"     loading={pipelineLoading} />
+            </Link>
+            <Link to="/export" className="block">
+              <KpiCard icon={CheckCircle2}  label="Export Ready"      value={pipeline?.exportReady ?? 0}         sub="≥90, price filled"                          color="text-success"     loading={pipelineLoading} />
+            </Link>
           </div>
 
           {/* ── Running progress banner ──────────────────────────────────────── */}
