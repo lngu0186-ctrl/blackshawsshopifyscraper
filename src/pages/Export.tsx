@@ -319,7 +319,7 @@ export default function Export() {
               <div className="rounded-lg border border-border bg-card p-5 space-y-3 shadow-card">
                 <h2 className="text-sm font-semibold">Export Modes</h2>
 
-                <Button className="w-full h-12 justify-start gap-3 bg-emerald-600 hover:bg-emerald-700 text-white"
+                <Button className="w-full h-12 justify-start gap-3 bg-primary hover:bg-primary/90 text-primary-foreground"
                   onClick={handleExportReady}>
                   <CheckCircle2 className="w-4 h-4" />
                   <div className="text-left">
