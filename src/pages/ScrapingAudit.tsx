@@ -1264,7 +1264,7 @@ export default function ScrapingAudit() {
                 <h2 className="text-sm font-semibold">Part 6 — Platform-Specific Scraping Method Audit</h2>
                 <p className="text-xs text-muted-foreground">Analysis of which scraping methods are in use and their limitations.</p>
               </div>
-              <Part6 storeRows={storeRows} />
+              <Part6 storeRows={storeRows} onDetectPlatforms={() => detectPlatforms.mutate()} detectingPlatforms={detectPlatforms.isPending} />
             </TabsContent>
 
             <TabsContent value="part7">
