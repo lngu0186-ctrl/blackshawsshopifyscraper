@@ -7,6 +7,7 @@
  *   - readyCount, reviewRequired, partialRaw
  *   - field coverage: missingPrice, missingImage, missingDescription, missingBarcode
  *   - per-source breakdown
+ *   - productsTableStats: canonical counts from the products table (used by Dashboard pipeline stages)
  */
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
