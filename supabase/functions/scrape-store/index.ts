@@ -12,7 +12,7 @@ const BASE_HEADERS = {
 };
 
 // ── Timing constants ──────────────────────────────────────────────────────────
-const REQUEST_TIMEOUT_MS   = 20_000;
+const REQUEST_TIMEOUT_MS    = 20_000;
 const COLLECTION_TIMEOUT_MS = 45_000;
 const STORE_TIMEOUT_MS      = 10 * 60_000;
 const BACKOFF_DELAYS        = [2_000, 5_000, 15_000];
@@ -48,6 +48,38 @@ async function buildContentHash(product: any): Promise<string> {
 }
 function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)); }
 
+// ── Inline confidence scoring ─────────────────────────────────────────────────
+function computeConfidence(product: any, priceMin: number | null, hasVariantWithSku: boolean): {
+  score: number;
+  status: string;
+  flags: string[];
+} {
+  const flags: string[] = [];
+  let score = 0;
+
+  if (product.title && product.title.trim()) score += 20;
+  if (priceMin != null && priceMin > 0) score += 20;
+  else flags.push('missing_price');
+  if (product.vendor && product.vendor.trim()) score += 10;
+  if (product.images && product.images.length > 0) score += 15;
+  else flags.push('missing_image');
+  if (product.body_html && product.body_html.trim()) score += 15;
+  else flags.push('missing_description');
+  if (hasVariantWithSku) score += 10;
+  // +10 for scraped_at being set (always true for newly scraped products)
+  score += 10;
+
+  let status: string;
+  const hasCriticalFlag = flags.includes('missing_price') || flags.includes('missing_image');
+  if (score >= 80 && !hasCriticalFlag) status = 'ready';
+  else if (score >= 80) status = 'review_required';
+  else if (score >= 50) status = 'validated';
+  else if (score >= 20) status = 'normalized';
+  else status = 'discovered';
+
+  return { score, status, flags };
+}
+
 // ── Fetch with AbortController + timeout ─────────────────────────────────────
 async function fetchWithTimeout(url: string, extraHeaders: Record<string, string> = {}, timeoutMs = REQUEST_TIMEOUT_MS): Promise<Response> {
   const ctrl = new AbortController();
@@ -76,7 +108,7 @@ function classifyError(err: unknown, status?: number): string {
   return 'unknown_error';
 }
 
-// ── Retry with exponential backoff (respects abort signal) ───────────────────
+// ── Retry with exponential backoff ────────────────────────────────────────────
 async function retryFetch(
   url: string,
   extraHeaders: Record<string, string>,
@@ -108,6 +140,43 @@ async function retryFetch(
     }
   }
   return { res: null, error: lastError, reasonCode, attempt: BACKOFF_DELAYS.length };
+}
+
+// ── Platform detection helper ─────────────────────────────────────────────────
+async function detectStorePlatform(baseUrl: string): Promise<{ platform: string; confidence: string }> {
+  // Test 1: /products.json → high confidence Shopify
+  try {
+    const res = await fetchWithTimeout(`${baseUrl}/products.json?limit=1`, {}, 10_000);
+    if (res.ok) {
+      const d = await res.json();
+      if (Array.isArray(d.products)) return { platform: 'shopify', confidence: 'high' };
+    }
+  } catch { /* fall through */ }
+
+  // Test 2: WooCommerce REST API
+  try {
+    const res = await fetchWithTimeout(`${baseUrl}/wp-json/wc/v3/products?per_page=1`, {}, 8_000);
+    if (res.ok) {
+      const d = await res.json();
+      if (Array.isArray(d)) return { platform: 'woocommerce', confidence: 'high' };
+    }
+  } catch { /* fall through */ }
+
+  // Test 3: HTML heuristics
+  try {
+    const res = await fetchWithTimeout(baseUrl, { Accept: 'text/html' }, 10_000);
+    if (res.ok) {
+      const html = await res.text();
+      if (html.includes('cdn.shopify.com') || html.includes('Shopify.theme') || /meta[^>]+generator[^>]+Shopify/i.test(html)) {
+        return { platform: 'shopify', confidence: 'medium' };
+      }
+      if (html.includes('/wp-content/') || html.includes('woocommerce') || /meta[^>]+generator[^>]+WooCommerce/i.test(html)) {
+        return { platform: 'woocommerce', confidence: 'medium' };
+      }
+    }
+  } catch { /* fall through */ }
+
+  return { platform: 'unknown', confidence: 'none' };
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -164,7 +233,7 @@ Deno.serve(async (req) => {
   let collectionsFailed = 0;
   const seenProductIds = new Set<string>();
 
-  // Batched quality warnings (not emitted per-product)
+  // Batched quality warnings — emit one summary per store, not per-product
   const missingImage: string[] = [];
   const missingPrice: string[] = [];
   const missingDesc: string[] = [];
@@ -179,10 +248,6 @@ Deno.serve(async (req) => {
     return !!data?.skip_requested;
   }
   function isStoreAborted(): boolean { return storeAbort.signal.aborted; }
-  function makeCheckSkip(checkCollection: boolean) {
-    // Synchronous fast check — doesn't hit DB (caller polls DB separately)
-    return () => isStoreAborted();
-  }
 
   // ── Event emitter ─────────────────────────────────────────────────────────
   async function emitEvent(opts: {
@@ -195,8 +260,8 @@ Deno.serve(async (req) => {
     const now = new Date().toISOString();
     await supabaseAdmin.from('scraper_events').insert({
       user_id: userId,
-      store_id: storeId,
-      run_id: scrapeRunId,
+      store_id: storeId,      // ALWAYS set — never null
+      run_id: scrapeRunId,    // ALWAYS set — never null
       stage: opts.stage,
       severity: opts.severity ?? 'info',
       message: opts.message,
@@ -213,7 +278,7 @@ Deno.serve(async (req) => {
       was_operator_action: opts.was_operator_action ?? false,
       ended_at: now,
     });
-    // Heartbeat: update last_event_at on run_store so stall detection works
+    // Heartbeat: update last_event_at so stall detection works
     await supabaseAdmin.from('scrape_run_stores').update({ last_event_at: now }).eq('id', runStoreId);
   }
 
@@ -226,10 +291,10 @@ Deno.serve(async (req) => {
     await supabaseAdmin.from('scrape_run_stores').update(patch).eq('id', runStoreId);
   }
 
-  // ── Product persistence ───────────────────────────────────────────────────
+  // ── Product persistence with inline confidence scoring ────────────────────
   async function processProduct(product: any, productBaseUrl: string, collectionHandle?: string) {
     const shopifyId = String(product.id);
-    if (seenProductIds.has(shopifyId)) return;
+    if (seenProductIds.has(shopifyId)) return;   // dedup by shopify product ID
     seenProductIds.add(shopifyId);
 
     const handle = product.handle || '';
@@ -238,7 +303,18 @@ Deno.serve(async (req) => {
     const contentHash = await buildContentHash(product);
     const priceArr = (product.variants || []).map((v: any) => parseFloat(v.price) || 0).filter((p: number) => p > 0);
     const compareArr = (product.variants || []).map((v: any) => parseFloat(v.compare_at_price) || 0).filter((p: number) => p > 0);
-    const productType = product.product_type || (collectionHandle ? collectionHandle.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null);
+    const priceMin = priceArr.length > 0 ? Math.min(...priceArr) : null;
+
+    // Derive product_type from collection handle if not set
+    const productType = product.product_type || (collectionHandle
+      ? collectionHandle.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase())
+      : null);
+
+    // Check if any variant has a SKU or barcode
+    const hasVariantWithSku = (product.variants || []).some((v: any) => v.sku || v.barcode);
+
+    // Inline confidence scoring — no post-run backfill needed
+    const { score, status, flags } = computeConfidence(product, priceMin, hasVariantWithSku);
 
     const productData = {
       user_id: userId, store_id: storeId, store_name: store.name, store_slug: storeSlug,
@@ -249,7 +325,7 @@ Deno.serve(async (req) => {
       published: product.published_at != null, status: 'active',
       url: `${productBaseUrl}/products/${handle}`,
       images: product.images || [], options: product.options || [], raw_product: product,
-      price_min: priceArr.length > 0 ? Math.min(...priceArr) : null,
+      price_min: priceMin,
       price_max: priceArr.length > 0 ? Math.max(...priceArr) : null,
       compare_at_price_min: compareArr.length > 0 ? Math.min(...compareArr) : null,
       compare_at_price_max: compareArr.length > 0 ? Math.max(...compareArr) : null,
@@ -257,7 +333,16 @@ Deno.serve(async (req) => {
       shopify_created_at: product.created_at || null, shopify_updated_at: product.updated_at || null,
       shopify_published_at: product.published_at || null,
       scraped_at: new Date().toISOString(), content_hash: contentHash,
+      // Confidence scoring — set inline, not via post-run backfill
+      confidence_score: score,
+      product_scrape_status: status,
+      issue_flags: flags,
     };
+
+    // Batch quality issues silently — emit ONE summary event per store at end
+    if (!priceMin) missingPrice.push(handle);
+    if (!product.images || product.images.length === 0) missingImage.push(handle);
+    if (!product.body_html || product.body_html.trim() === '') missingDesc.push(handle);
 
     const { data: existing } = await supabaseAdmin.from('products').select('id, content_hash, first_seen_at').eq('store_id', storeId).eq('handle', handle).single();
     const hashChanged = existing && existing.content_hash !== contentHash;
@@ -267,11 +352,6 @@ Deno.serve(async (req) => {
     const { data: saved, error: productErr } = await supabaseAdmin.from('products').upsert(upsertData, { onConflict: 'store_id,handle' }).select('id').single();
     if (productErr || !saved) return;
     const productId = saved.id;
-
-    // Batch quality issues — emit one summary event per store at the end, not per-product
-    if (!productData.price_min) missingPrice.push(handle);
-    if (!product.images || product.images.length === 0) missingImage.push(handle);
-    if (!product.body_html || product.body_html.trim() === '') missingDesc.push(handle);
 
     // Process variants + price history
     for (const variant of product.variants || []) {
@@ -374,6 +454,7 @@ Deno.serve(async (req) => {
         url: nextUrl, collection_handle: collectionHandle, strategy_name: 'products_json',
         attempt_number: attempt, duration_ms: Date.now() - t0,
       });
+      // Increment pages_visited on the run record
       await supabaseAdmin.from('scrape_runs').update({ pages_visited: pagesVisited }).eq('id', scrapeRunId);
 
       if (products.length === 0) break;
@@ -384,7 +465,7 @@ Deno.serve(async (req) => {
         await processProduct(product, baseUrl, collectionHandle);
       }
 
-      // Advance pagination
+      // Advance pagination: prefer Link header, fall back to ?page=N
       const linkHeader = res.headers.get('link') || '';
       const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
       if (nextMatch && useLinkHeader) {
@@ -416,7 +497,7 @@ Deno.serve(async (req) => {
     if (!res || !res.ok) return { count: 0, error: fetchErr ?? `HTTP ${res?.status}` };
 
     const html = await res.text();
-    // Extract product handles from HTML href="/products/handle"
+    // Extract product handles from href="/products/handle"
     const handleMatches = [...html.matchAll(/href="\/products\/([a-z0-9\-_]+)"/g)].map(m => m[1]);
     const uniqueHandles = [...new Set(handleMatches)];
     if (uniqueHandles.length === 0) return { count: 0, error: 'selector_missing' };
@@ -433,7 +514,7 @@ Deno.serve(async (req) => {
         await sleep(1500);
       } catch { /* skip individual */ }
     }
-    return { count, error: null };
+    return { count, error: count > 0 ? null : 'empty_response' };
   }
 
   // ── Strategy C: sitemap-discovered URLs ───────────────────────────────────
@@ -441,7 +522,6 @@ Deno.serve(async (req) => {
     collectionHandle: string,
     checkSkip: () => boolean,
   ): Promise<{ count: number; error: string | null }> {
-    // Probe the sitemap for product handles matching this collection
     const sitemapUrls = [`${baseUrl}/sitemap.xml`, `${baseUrl}/sitemap_products_1.xml`];
     let productHandles: string[] = [];
 
@@ -470,13 +550,12 @@ Deno.serve(async (req) => {
         await sleep(1500);
       } catch { /* skip */ }
     }
-    return { count, error: null };
+    return { count, error: count > 0 ? null : 'empty_response' };
   }
 
   // ── Per-collection state machine ──────────────────────────────────────────
   async function scrapeCollection(col: { handle: string; title: string }): Promise<CollectionState> {
     const t0 = Date.now();
-    let state: CollectionState = 'running';
     let currentStrategy: Strategy = 'products_json';
 
     // Check skip before we even start
@@ -536,7 +615,6 @@ Deno.serve(async (req) => {
       } else if (strategy === 'collection_html') {
         result = await strategyB_collectionHtml(col.handle, checkSkip);
       } else {
-        // sitemap_urls
         result = await strategyC_sitemapUrls(col.handle, checkSkip);
       }
 
@@ -572,34 +650,88 @@ Deno.serve(async (req) => {
   try {
     await emitEvent({ stage: 'run_started', severity: 'info', message: `Run started for ${store.name}`, strategy_name: 'products_json' });
 
-    // Discover all collections
+    // ── Detect + persist platform if still unknown ─────────────────────────
+    let effectivePlatform = store.platform || 'unknown';
+    if (effectivePlatform === 'unknown' || !effectivePlatform) {
+      const detected = await detectStorePlatform(baseUrl);
+      effectivePlatform = detected.platform;
+      await supabaseAdmin.from('stores').update({
+        platform: detected.platform,
+        platform_confidence: detected.confidence,
+      }).eq('id', storeId);
+      await emitEvent({
+        stage: 'platform_detected', severity: 'info',
+        message: `Platform detected: ${detected.platform} (confidence: ${detected.confidence})`,
+        strategy_name: detected.platform,
+      });
+    }
+
+    // ── Validate strategy vs platform ──────────────────────────────────────
+    // If platform is NOT Shopify, products_json will return empty — warn and adjust
+    let actualStrategy = store.scrape_strategy;
+    if (effectivePlatform === 'woocommerce' && actualStrategy === 'products_json') {
+      await emitEvent({
+        stage: 'strategy_mismatch', severity: 'warning',
+        message: `Store uses WooCommerce but strategy is products_json (Shopify). Switching to collection_html fallback.`,
+        reason_code: 'strategy_fallback_success', was_auto_recovered: true,
+      });
+      actualStrategy = 'collection_html';
+    }
+
+    // ── Discover all collections ────────────────────────────────────────────
     const collectionsUrl = `${baseUrl}/collections.json?limit=250`;
     let collections: Array<{ handle: string; title: string }> = [];
 
-    try {
-      const { res } = await retryFetch(collectionsUrl, authHeaders, makeCheckSkip(false), 'collections.json');
-      if (res?.ok) {
-        const d = await res.json();
-        if (Array.isArray(d.collections) && d.collections.length > 0) {
-          collections = d.collections.map((c: any) => ({ handle: c.handle, title: c.title }));
+    // Paginate through collections.json (stores can have 250+ collections)
+    let colPage = 1;
+    let colKeepGoing = true;
+    while (colKeepGoing && !isStoreAborted()) {
+      try {
+        const colUrl = `${collectionsUrl}&page=${colPage}`;
+        const { res } = await retryFetch(colUrl, authHeaders, () => isStoreAborted(), 'collections.json');
+        if (res?.ok) {
+          const d = await res.json();
+          if (Array.isArray(d.collections) && d.collections.length > 0) {
+            collections.push(...d.collections.map((c: any) => ({ handle: c.handle, title: c.title })));
+            colKeepGoing = d.collections.length === 250;
+            colPage++;
+          } else {
+            colKeepGoing = false;
+          }
+        } else {
+          colKeepGoing = false;
         }
+      } catch {
+        colKeepGoing = false;
       }
-    } catch { /* fall through */ }
+    }
 
-    // Fallback: use 'all' collection if no collections found
+    // Fallback: if no collections found, use defaults + products.json flat
     if (collections.length === 0) {
       collections = [
         { handle: 'all', title: 'All Products' },
         { handle: 'frontpage', title: 'Front Page' },
       ];
-      await emitEvent({ stage: 'category_discovery_failed', severity: 'warning', message: `No collections discovered via /collections.json — using fallback collection list`, url: collectionsUrl });
+      await emitEvent({
+        stage: 'category_discovery_failed', severity: 'warning',
+        message: `No collections discovered via /collections.json — using fallback ['all', 'frontpage']`,
+        url: collectionsUrl,
+      });
     } else {
-      await emitEvent({ stage: 'category_discovery_completed', severity: 'info', message: `Discovered ${collections.length} collections for ${store.name}`, url: collectionsUrl });
+      await emitEvent({
+        stage: 'category_discovery_completed', severity: 'info',
+        message: `Discovered ${collections.length} collections for ${store.name}`,
+        url: collectionsUrl,
+      });
     }
+
+    // Dedup collections by handle (safety)
+    const seen = new Set<string>();
+    collections = collections.filter(c => seen.has(c.handle) ? false : (seen.add(c.handle), true));
 
     await updateProgress({ collections_total: collections.length });
 
-    // Scrape each collection through the state machine
+    // ── Scrape each collection through the state machine ──────────────────
     for (const col of collections) {
       if (isStoreAborted()) {
         const abortReason = storeAbort.signal.reason;
@@ -611,13 +743,9 @@ Deno.serve(async (req) => {
 
       const colState = await scrapeCollection(col);
 
-      if (colState === 'success') {
-        collectionsCompleted++;
-      } else if (colState === 'skipped') {
-        collectionsSkipped++;
-      } else {
-        collectionsFailed++;
-      }
+      if (colState === 'success') collectionsCompleted++;
+      else if (colState === 'skipped') collectionsSkipped++;
+      else collectionsFailed++;
 
       await updateProgress({
         collections_completed: collectionsCompleted,
@@ -625,19 +753,31 @@ Deno.serve(async (req) => {
         collections_failed: collectionsFailed,
       });
 
-      // Inter-collection delay
+      // Inter-collection delay to avoid rate limiting
       if (!isStoreAborted()) await sleep(INTER_COLLECTION_DELAY);
     }
 
-    // Emit batched quality warnings (one per store, not per product)
+    // ── Batched quality summary events (not per-product) ─────────────────
     if (missingImage.length > 0) {
-      await emitEvent({ stage: 'image_missing_summary', severity: 'warning', message: `${missingImage.length} products missing images for ${store.name}`, reason_code: 'no_images' });
+      await emitEvent({
+        stage: 'image_missing_summary', severity: 'warning',
+        message: `${missingImage.length} of ${totalProducts} products missing images for ${store.name}`,
+        reason_code: 'no_images',
+      });
     }
     if (missingPrice.length > 0) {
-      await emitEvent({ stage: 'price_missing_summary', severity: 'warning', message: `${missingPrice.length} products missing prices for ${store.name}`, reason_code: 'no_variants_with_price' });
+      await emitEvent({
+        stage: 'price_missing_summary', severity: 'warning',
+        message: `${missingPrice.length} of ${totalProducts} products missing prices for ${store.name}`,
+        reason_code: 'no_variants_with_price',
+      });
     }
     if (missingDesc.length > 0) {
-      await emitEvent({ stage: 'description_missing_summary', severity: 'warning', message: `${missingDesc.length} products missing descriptions for ${store.name}`, reason_code: 'empty_body_html' });
+      await emitEvent({
+        stage: 'description_missing_summary', severity: 'warning',
+        message: `${missingDesc.length} of ${totalProducts} products missing descriptions for ${store.name}`,
+        reason_code: 'empty_body_html',
+      });
     }
 
     // Determine final terminal status
@@ -645,12 +785,18 @@ Deno.serve(async (req) => {
       storeTerminal = 'completed_with_skips';
     }
 
-    // Persist store + metrics
-    await supabaseAdmin.from('stores').update({ last_scraped_at: new Date().toISOString(), total_products: totalProducts }).eq('id', storeId);
+    // ── Persist store + metrics ───────────────────────────────────────────
+    await supabaseAdmin.from('stores').update({
+      last_scraped_at: new Date().toISOString(),
+      total_products: totalProducts,
+    }).eq('id', storeId);
 
     const { data: avgData } = await supabaseAdmin.from('products').select('price_min').eq('store_id', storeId).eq('user_id', userId);
     const avgPriceMin = avgData?.length ? avgData.reduce((a: number, p: any) => a + (p.price_min || 0), 0) / avgData.length : null;
-    await supabaseAdmin.from('store_metrics_history').insert({ user_id: userId, store_id: storeId, total_products: totalProducts, price_changes: totalPriceChanges, avg_price_min: avgPriceMin });
+    await supabaseAdmin.from('store_metrics_history').insert({
+      user_id: userId, store_id: storeId, total_products: totalProducts,
+      price_changes: totalPriceChanges, avg_price_min: avgPriceMin,
+    });
 
     const statusMap: Record<StoreTerminal, string> = {
       completed: 'completed', completed_with_skips: 'completed',
@@ -666,7 +812,7 @@ Deno.serve(async (req) => {
       price_changes: totalPriceChanges,
       current_collection: null,
       current_strategy: null,
-      message: `${totalProducts} products, ${totalPriceChanges} price changes, ${collectionsSkipped} skipped`,
+      message: `${totalProducts} products · ${totalPriceChanges} price changes · ${collectionsCompleted} collections · ${collectionsSkipped} skipped`,
     }).eq('id', runStoreId);
 
     // Update run totals
@@ -683,16 +829,23 @@ Deno.serve(async (req) => {
 
     await emitEvent({
       stage: 'run_completed', severity: 'info',
-      message: `${store.name} ${storeTerminal}: ${totalProducts} products, ${collectionsCompleted} collections ok, ${collectionsSkipped} skipped, ${collectionsFailed} failed`,
+      message: `${store.name} ${storeTerminal}: ${totalProducts} products, ${collectionsCompleted} collections, ${collectionsSkipped} skipped, ${collectionsFailed} failed`,
       strategy_name: storeTerminal,
     });
 
     clearTimeout(storeTimeout);
-    return new Response(JSON.stringify({ success: true, totalProducts, totalPriceChanges, pagesVisited, storeTerminal }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(
+      JSON.stringify({ success: true, totalProducts, totalPriceChanges, pagesVisited, collectionsCompleted, collectionsSkipped, collectionsFailed, storeTerminal, platform: effectivePlatform }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
 
   } catch (err) {
     clearTimeout(storeTimeout);
-    await emitEvent({ stage: 'run_failed', severity: 'critical', message: `Fatal error: ${String(err)}`, raw_error: String(err), reason_code: 'unknown_error' });
+    await emitEvent({
+      stage: 'run_failed', severity: 'critical',
+      message: `Fatal error in ${store.name}: ${String(err)}`,
+      raw_error: String(err), reason_code: 'unknown_error',
+    });
     await supabaseAdmin.from('scrape_run_stores').update({
       status: 'error', terminal_status: 'failed',
       finished_at: new Date().toISOString(),
