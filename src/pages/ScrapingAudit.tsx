@@ -3,12 +3,13 @@
  * per store, category discovery, detail-fetch status, and silent failures.
  * All data is queried live from the database; nothing is hardcoded.
  */
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useState } from 'react';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -16,9 +17,10 @@ import {
 import {
   CheckCircle2, AlertTriangle, XCircle, HelpCircle,
   Info, Database, Layers, SearchCode, Bug, Cpu, ListChecks,
-  ExternalLink, ChevronDown, ChevronRight,
+  ExternalLink, ChevronDown, ChevronRight, Play, RefreshCw,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 interface StoreAuditRow {
