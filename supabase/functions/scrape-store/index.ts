@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
 
   await supabaseAdmin.from('scrape_run_stores').update({ status: 'fetching', started_at: new Date().toISOString() }).eq('id', runStoreId);
 
-  // ── scraper_events helper ──────────────────────────────────────────────────
+  // ── scraper_events helper — always includes store_id and run_id ─────────────
   async function emitEvent(opts: {
     stage: string; severity?: string; message: string;
     url?: string | null; reason_code?: string | null; raw_error?: string | null;
@@ -107,8 +107,8 @@ Deno.serve(async (req) => {
   }) {
     await supabaseAdmin.from('scraper_events').insert({
       user_id: userId,
-      store_id: storeId,
-      run_id: scrapeRunId,
+      store_id: storeId,      // always set — never NULL
+      run_id: scrapeRunId,    // always set — never NULL
       product_id: opts.product_id ?? null,
       stage: opts.stage,
       severity: opts.severity ?? 'info',
@@ -127,6 +127,17 @@ Deno.serve(async (req) => {
   async function checkCancelled(): Promise<boolean> {
     const { data } = await supabaseAdmin.from('scrape_runs').select('status').eq('id', scrapeRunId).single();
     return data?.status === 'cancelled';
+  }
+
+  // Track pages visited — incremented and written to scrape_runs at finalization
+  let pagesVisited = 0;
+
+  // Helper to increment pages_visited on scrape_runs
+  async function incrementPagesVisited(delta: number) {
+    pagesVisited += delta;
+    await supabaseAdmin.from('scrape_runs')
+      .update({ pages_visited: pagesVisited })
+      .eq('id', scrapeRunId);
   }
 
   // ── Emit run_started ──────────────────────────────────────────────────────
@@ -171,8 +182,14 @@ Deno.serve(async (req) => {
   let totalProducts = 0;
   let totalPriceChanges = 0;
   let pageCount = 0;
+  const seenProductIds = new Set<string>(); // for deduplication across collections
 
-  async function processProduct(product: any, productBaseUrl: string) {
+  async function processProduct(product: any, productBaseUrl: string, collectionHandle?: string) {
+    const shopifyId = String(product.id);
+    // Dedup by Shopify product ID across multiple collections
+    if (seenProductIds.has(shopifyId)) return;
+    seenProductIds.add(shopifyId);
+
     const handle = product.handle || '';
     const storeHandle = `${storeSlug}-${handle}`;
     const bodyPlain = htmlToPlainText(product.body_html || '');
@@ -180,16 +197,19 @@ Deno.serve(async (req) => {
     const priceArr = (product.variants || []).map((v: any) => parseFloat(v.price) || 0).filter((p: number) => p > 0);
     const compareArr = (product.variants || []).map((v: any) => parseFloat(v.compare_at_price) || 0).filter((p: number) => p > 0);
 
+    // Derive product_type from collection handle if not set on product
+    const productType = product.product_type || (collectionHandle ? collectionHandle.replace(/-/g, ' ').replace(/\b\w/g, (c: string) => c.toUpperCase()) : null);
+
     const productData = {
       user_id: userId, store_id: storeId, store_name: store.name, store_slug: storeSlug, handle, store_handle: storeHandle,
       title: product.title || '', body_html: product.body_html || null, body_plain: bodyPlain || null,
-      vendor: product.vendor || null, product_type: product.product_type || null,
+      vendor: product.vendor || null, product_type: productType,
       tags: Array.isArray(product.tags) ? product.tags.join(', ') : (product.tags || null),
       published: product.published_at != null, status: 'active', url: `${productBaseUrl}/products/${handle}`,
       images: product.images || [], options: product.options || [], raw_product: product,
       price_min: priceArr.length > 0 ? Math.min(...priceArr) : null, price_max: priceArr.length > 0 ? Math.max(...priceArr) : null,
       compare_at_price_min: compareArr.length > 0 ? Math.min(...compareArr) : null, compare_at_price_max: compareArr.length > 0 ? Math.max(...compareArr) : null,
-      shopify_product_id: String(product.id), shopify_created_at: product.created_at || null, shopify_updated_at: product.updated_at || null,
+      shopify_product_id: shopifyId, shopify_created_at: product.created_at || null, shopify_updated_at: product.updated_at || null,
       shopify_published_at: product.published_at || null, scraped_at: new Date().toISOString(), content_hash: contentHash,
     };
 
@@ -276,6 +296,139 @@ Deno.serve(async (req) => {
     totalProducts++;
   }
 
+  // ── Shopify: paginate a single products endpoint ──────────────────────────
+  async function paginateProductsEndpoint(
+    startUrl: string,
+    collectionHandle?: string,
+    label?: string,
+  ): Promise<number> {
+    let nextUrl: string | null = startUrl;
+    let useLinkHeader = true;
+    let page = 1;
+    let fetched = 0;
+
+    while (nextUrl) {
+      if (await checkCancelled()) return fetched;
+      await log('info', `[${label ?? collectionHandle ?? 'products'}] page ${page} — ${totalProducts} total so far`);
+
+      let response: Response;
+      try {
+        response = await fetchWithRetry(nextUrl, authHeaders);
+      } catch (err) {
+        await log('error', `Fetch failed on page ${page}: ${String(err)}`);
+        await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Fetch failed on page ${page}: ${String(err)}`, url: nextUrl, raw_error: String(err) });
+        throw err;
+      }
+
+      if (response.status === 429) {
+        await emitEvent({ stage: 'rate_limited', severity: 'warning', message: `Rate limited on page ${page} for ${store.name}`, url: nextUrl, reason_code: 'http_429' });
+      }
+      if (response.status === 404) { await log('info', `404 on page ${page} — treating as end`); break; }
+      if (!response.ok) throw new Error(`HTTP ${response.status} on page ${page}`);
+
+      const data = await response.json();
+      const products: any[] = data.products || [];
+      pageCount++;
+      fetched += products.length;
+
+      // Emit per-page event for pagination auditing
+      await emitEvent({
+        stage: 'page_fetched',
+        severity: 'info',
+        message: `Page ${page} — ${label ?? collectionHandle ?? 'products.json'} — ${products.length} products`,
+        url: nextUrl,
+        source_platform: scrapeStrategy,
+      });
+      await incrementPagesVisited(1);
+
+      if (products.length === 0) break;
+
+      const linkHeader = response.headers.get('link') || '';
+      const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
+      if (nextMatch && useLinkHeader) { nextUrl = nextMatch[1]; }
+      else if (products.length === 250 && !useLinkHeader) { page++; nextUrl = `${startUrl.split('?')[0]}?limit=250&page=${page}`; }
+      else if (products.length === 250 && useLinkHeader && !nextMatch) { useLinkHeader = false; page = 2; nextUrl = `${startUrl.split('?')[0]}?limit=250&page=${page}`; }
+      else { nextUrl = null; }
+
+      for (const product of products) {
+        if (maxProducts > 0 && totalProducts >= maxProducts) { nextUrl = null; break; }
+        await processProduct(product, baseUrl, collectionHandle);
+      }
+      if (nextUrl) await sleep(interPageDelay);
+      page++;
+    }
+
+    // Emit pagination_complete for this collection/endpoint
+    await emitEvent({
+      stage: 'pagination_complete',
+      severity: 'info',
+      message: `Pagination complete — ${page - 1} pages — ${label ?? collectionHandle ?? 'products.json'} — ${fetched} products`,
+      url: startUrl,
+      source_platform: scrapeStrategy,
+    });
+
+    return fetched;
+  }
+
+  // ── Shopify: discover all collections then scrape each ────────────────────
+  async function scrapeShopifyWithCollections(): Promise<boolean> {
+    // Step 1: Try to fetch all collections
+    const collectionsUrl = `${baseUrl}/collections.json?limit=250`;
+    let collections: Array<{ handle: string; title: string }> = [];
+    let collectionsFetched = false;
+
+    try {
+      const collRes = await fetchWithRetry(collectionsUrl, authHeaders);
+      if (collRes.ok) {
+        const collData = await collRes.json();
+        if (Array.isArray(collData.collections) && collData.collections.length > 0) {
+          collections = collData.collections.map((c: any) => ({ handle: c.handle, title: c.title }));
+          collectionsFetched = true;
+          await log('info', `Discovered ${collections.length} collections via /collections.json`);
+          await emitEvent({
+            stage: 'category_discovery_started',
+            severity: 'info',
+            message: `Discovered ${collections.length} collections for ${store.name}`,
+            url: collectionsUrl,
+          });
+        }
+      }
+    } catch (err) {
+      await log('warn', `collections.json fetch failed: ${String(err)} — will fall back to products.json`);
+    }
+
+    if (!collectionsFetched || collections.length === 0) {
+      // No collections found — fall back to flat products.json
+      return false;
+    }
+
+    // Step 2: Scrape each collection
+    let collectionsScraped = 0;
+    for (const col of collections) {
+      if (maxProducts > 0 && totalProducts >= maxProducts) break;
+      if (await checkCancelled()) break;
+
+      const colUrl = `${baseUrl}/collections/${col.handle}/products.json?limit=250`;
+      try {
+        await paginateProductsEndpoint(colUrl, col.handle, col.title);
+        collectionsScraped++;
+      } catch (err) {
+        await log('warn', `Collection ${col.handle} failed: ${String(err)}`);
+        await emitEvent({ stage: 'category_discovery_failed', severity: 'warning', message: `Collection ${col.handle} scrape failed: ${String(err)}`, url: colUrl, raw_error: String(err) });
+      }
+      await sleep(interPageDelay);
+    }
+
+    await emitEvent({
+      stage: 'category_discovery_completed',
+      severity: 'info',
+      message: `Collection traversal complete — ${collectionsScraped}/${collections.length} collections scraped — ${totalProducts} unique products`,
+      url: baseUrl,
+    });
+
+    return true;
+  }
+
   try {
     await log('info', `Probing ${store.name} — using ${scrapeStrategy} strategy`);
 
@@ -289,52 +442,53 @@ Deno.serve(async (req) => {
       effectiveStrategy = 'products_json';
     }
 
-    // ── Strategy: products_json ──────────────────────────────────────────────
+    // ── Strategy: products_json — try collections first, fall back to flat ───
     if (effectiveStrategy === 'products_json' || effectiveStrategy === 'password_protected') {
-      let nextUrl: string | null = `${baseUrl}/products.json?limit=250`;
-      let useLinkHeader = true;
-      let page = 1;
+      // Attempt Shopify collection traversal (primary method)
+      const usedCollections = await scrapeShopifyWithCollections();
 
-      while (nextUrl) {
-        if (await checkCancelled()) {
-          await supabaseAdmin.from('scrape_run_stores').update({ status: 'cancelled', finished_at: new Date().toISOString(), page_count: pageCount, product_count: totalProducts, price_changes: totalPriceChanges }).eq('id', runStoreId);
-          return new Response(JSON.stringify({ cancelled: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      if (!usedCollections) {
+        // Fallback: flat /products.json pagination
+        await log('info', `Falling back to flat /products.json for ${store.name}`);
+        await emitEvent({ stage: 'category_discovery_failed', severity: 'warning', message: `No collections found — using flat products.json fallback`, url: `${baseUrl}/collections.json` });
+        await paginateProductsEndpoint(`${baseUrl}/products.json?limit=250`, undefined, 'products.json (flat fallback)');
+      }
+
+      // Handle stores that returned 0 products — diagnose
+      if (totalProducts === 0) {
+        // Try alternative endpoints
+        const altEndpoints = [
+          `${baseUrl}/products.json?limit=5`,
+          `${baseUrl}/collections/all/products.json?limit=5`,
+        ];
+        let altWorked = false;
+        for (const ep of altEndpoints) {
+          try {
+            const probe = await fetchWithRetry(ep, authHeaders);
+            if (probe.ok) {
+              const d = await probe.json();
+              if (Array.isArray(d.products) && d.products.length > 0) {
+                altWorked = true;
+                await log('warn', `Alternative endpoint ${ep} returned products — previous fetch may have been rate-limited`);
+                break;
+              }
+            } else if (probe.status === 401 || probe.status === 403) {
+              await emitEvent({ stage: 'auth_blocked', severity: 'error', message: `Auth-gated response (HTTP ${probe.status}) from ${ep}`, url: ep, reason_code: `http_${probe.status}` });
+              break;
+            }
+          } catch { /* ignore */ }
         }
-        await log('info', `strategy: ${effectiveStrategy} — fetching page ${page} — ${totalProducts} products`);
 
-        let response: Response;
-        try {
-          response = await fetchWithRetry(nextUrl, authHeaders);
-        } catch (err) {
-          await log('error', `Failed to fetch page ${page}: ${String(err)}`);
-          await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Fetch failed on page ${page}: ${String(err)}`, url: nextUrl, raw_error: String(err) });
-          throw err;
+        if (!altWorked) {
+          await emitEvent({
+            stage: 'product_extraction_failed',
+            severity: 'error',
+            message: `All product endpoints returned empty or blocked for ${store.name}. Store may be unreachable, auth-required, or have no products.`,
+            url: baseUrl,
+            reason_code: 'all_endpoints_empty',
+          });
+          await supabaseAdmin.from('stores').update({ store_status: 'unreachable' }).eq('id', storeId);
         }
-
-        if (response.status === 429) {
-          await emitEvent({ stage: 'rate_limited', severity: 'warning', message: `Rate limited on page ${page} for ${store.name}`, url: nextUrl, reason_code: 'http_429' });
-        }
-
-        if (response.status === 404) { await log('info', `products.json returned 404 on page ${page} — treating as no products`); break; }
-        if (!response.ok) throw new Error(`HTTP ${response.status} on page ${page}`);
-
-        const data = await response.json();
-        const products: any[] = data.products || [];
-        pageCount++;
-        if (products.length === 0) break;
-
-        const linkHeader = response.headers.get('link') || '';
-        const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        if (nextMatch && useLinkHeader) { nextUrl = nextMatch[1]; }
-        else if (products.length === 250 && !useLinkHeader) { page++; nextUrl = `${baseUrl}/products.json?limit=250&page=${page}`; }
-        else if (products.length === 250 && useLinkHeader && !nextMatch) { useLinkHeader = false; page = 2; nextUrl = `${baseUrl}/products.json?limit=250&page=${page}`; }
-        else { nextUrl = null; }
-
-        for (const product of products) {
-          if (maxProducts > 0 && totalProducts >= maxProducts) { nextUrl = null; break; }
-          await processProduct(product, baseUrl);
-        }
-        if (nextUrl) await sleep(interPageDelay);
       }
     }
 
@@ -353,54 +507,50 @@ Deno.serve(async (req) => {
         throw new Error('collections_json: neither all nor frontpage collection accessible');
       }
 
-      let page = 1;
-      let nextUrl: string | null = `${successBase}?limit=250`;
-      let useLinkHeader = true;
-
-      while (nextUrl) {
-        if (await checkCancelled()) {
-          await supabaseAdmin.from('scrape_run_stores').update({ status: 'cancelled', finished_at: new Date().toISOString(), page_count: pageCount, product_count: totalProducts, price_changes: totalPriceChanges }).eq('id', runStoreId);
-          return new Response(JSON.stringify({ cancelled: true }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
-        }
-        await log('info', `strategy: collections_json — fetching page ${page} — ${totalProducts} products`);
-
-        const response = await fetchWithRetry(nextUrl, authHeaders);
-        if (response.status === 404) { await log('info', `collections_json returned 404 on page ${page} — treating as no products`); break; }
-        if (!response.ok) throw new Error(`HTTP ${response.status} on page ${page}`);
-
-        const data = await response.json();
-        const products: any[] = data.products || [];
-        pageCount++;
-        if (products.length === 0) break;
-
-        const linkHeader = response.headers.get('link') || '';
-        const nextMatch = linkHeader.match(/<([^>]+)>;\s*rel="next"/);
-        if (nextMatch && useLinkHeader) { nextUrl = nextMatch[1]; }
-        else if (products.length === 250 && !useLinkHeader) { page++; nextUrl = `${successBase}?limit=250&page=${page}`; }
-        else if (products.length === 250 && useLinkHeader && !nextMatch) { useLinkHeader = false; page = 2; nextUrl = `${successBase}?limit=250&page=${page}`; }
-        else { nextUrl = null; }
-
-        for (const product of products) {
-          if (maxProducts > 0 && totalProducts >= maxProducts) { nextUrl = null; break; }
-          await processProduct(product, baseUrl);
-        }
-        if (nextUrl) await sleep(interPageDelay);
-      }
+      await paginateProductsEndpoint(`${successBase}?limit=250`, 'all', 'collections/all');
     }
 
     // ── Strategy: sitemap_handles ────────────────────────────────────────────
     else if (effectiveStrategy === 'sitemap_handles') {
       await log('warn', `Sitemap strategy active for ${store.name} — fetching handles individually (slow)`);
-      const sitemapRes = await fetchWithRetry(`${baseUrl}/sitemap.xml`, { ...authHeaders, Accept: 'text/xml,application/xml;q=0.9' });
-      if (!sitemapRes.ok) {
-        await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Could not fetch sitemap: HTTP ${sitemapRes.status}`, url: `${baseUrl}/sitemap.xml`, reason_code: `http_${sitemapRes.status}` });
-        throw new Error(`Could not fetch sitemap: HTTP ${sitemapRes.status}`);
+
+      // Try multiple sitemap locations
+      const sitemapUrls = [
+        `${baseUrl}/sitemap.xml`,
+        `${baseUrl}/sitemap_products_1.xml`,
+      ];
+
+      let sitemapText: string | null = null;
+      let foundSitemapUrl: string | null = null;
+
+      for (const sitemapUrl of sitemapUrls) {
+        try {
+          const sitemapRes = await fetchWithRetry(sitemapUrl, { ...authHeaders, Accept: 'text/xml,application/xml;q=0.9' });
+          if (sitemapRes.ok) {
+            sitemapText = await sitemapRes.text();
+            foundSitemapUrl = sitemapUrl;
+            break;
+          }
+        } catch { /* try next */ }
       }
 
-      const sitemapText = await sitemapRes.text();
+      if (!sitemapText || !foundSitemapUrl) {
+        await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Sitemap not found at any known location for ${store.name}`, url: `${baseUrl}/sitemap.xml`, reason_code: 'sitemap_not_found' });
+        await supabaseAdmin.from('stores').update({ store_status: 'unreachable', sitemap_found: false }).eq('id', storeId);
+        throw new Error('Sitemap not found');
+      }
+
       const handleMatches = sitemapText.match(/\/products\/([a-z0-9\-]+)/g) || [];
       const uniqueHandles = [...new Set(handleMatches.map(m => m.replace('/products/', '')))];
-      await log('warn', `Sitemap strategy: found ${uniqueHandles.length} handles, fetching individually (slow)`);
+
+      if (uniqueHandles.length === 0) {
+        await emitEvent({ stage: 'product_extraction_failed', severity: 'error', message: `Sitemap found but contains no product URLs for ${store.name}`, url: foundSitemapUrl, reason_code: 'sitemap_no_products' });
+        await supabaseAdmin.from('stores').update({ store_status: 'partial', sitemap_found: true, sitemap_url: foundSitemapUrl }).eq('id', storeId);
+        throw new Error('Sitemap found but no product handles detected');
+      }
+
+      await log('warn', `Sitemap strategy: found ${uniqueHandles.length} handles at ${foundSitemapUrl}`);
+      await supabaseAdmin.from('stores').update({ sitemap_found: true, sitemap_url: foundSitemapUrl }).eq('id', storeId);
 
       const totalHandles = uniqueHandles.length;
       let handleIndex = 0;
@@ -419,6 +569,7 @@ Deno.serve(async (req) => {
           const productData = await productRes.json();
           if (!productData?.product) continue;
           pageCount++;
+          await incrementPagesVisited(1);
           await processProduct(productData.product, baseUrl);
         } catch (err) {
           await log('warn', `Sitemap: failed to fetch handle ${handle}: ${String(err)}`);
@@ -426,6 +577,13 @@ Deno.serve(async (req) => {
         }
         await sleep(Math.max(interPageDelay, 500));
       }
+
+      await emitEvent({
+        stage: 'pagination_complete',
+        severity: 'info',
+        message: `Sitemap traversal complete — ${handleIndex} handles attempted — ${totalProducts} products saved`,
+        url: foundSitemapUrl,
+      });
     }
 
     // ── Finalize ─────────────────────────────────────────────────────────────
@@ -442,31 +600,33 @@ Deno.serve(async (req) => {
       message: `${totalProducts} products, ${totalPriceChanges} price changes`,
     }).eq('id', runStoreId);
 
-    const { data: runData } = await supabaseAdmin.from('scrape_runs').select('total_products, total_price_changes, completed_stores').eq('id', scrapeRunId).single();
+    const { data: runData } = await supabaseAdmin.from('scrape_runs').select('total_products, total_price_changes, completed_stores, pages_visited').eq('id', scrapeRunId).single();
     if (runData) {
       await supabaseAdmin.from('scrape_runs').update({
         total_products: (runData.total_products || 0) + totalProducts,
         total_price_changes: (runData.total_price_changes || 0) + totalPriceChanges,
         completed_stores: (runData.completed_stores || 0) + 1,
+        pages_visited: (runData.pages_visited || 0) + pagesVisited,
         run_status: 'export_ready',
       }).eq('id', scrapeRunId);
     }
 
-    await log('info', `Completed ${store.name}: ${totalProducts} products, ${totalPriceChanges} price changes`);
-    await emitEvent({ stage: 'run_completed', severity: 'info', message: `Run completed for ${store.name}: ${totalProducts} products, ${totalPriceChanges} price changes` });
+    await log('info', `Completed ${store.name}: ${totalProducts} products, ${totalPriceChanges} price changes, ${pagesVisited} pages visited`);
+    await emitEvent({ stage: 'run_completed', severity: 'info', message: `Run completed for ${store.name}: ${totalProducts} products, ${totalPriceChanges} price changes, ${pagesVisited} pages` });
 
-    return new Response(JSON.stringify({ success: true, totalProducts, totalPriceChanges, pageCount }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    return new Response(JSON.stringify({ success: true, totalProducts, totalPriceChanges, pageCount, pagesVisited }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (err) {
     await log('error', `Fatal error scraping ${store.name}: ${String(err)}`);
     await emitEvent({ stage: 'run_failed', severity: 'critical', message: `Fatal error scraping ${store.name}: ${String(err)}`, raw_error: String(err) });
     await supabaseAdmin.from('scrape_run_stores').update({ status: 'error', finished_at: new Date().toISOString(), page_count: pageCount, product_count: totalProducts, price_changes: totalPriceChanges, message: String(err) }).eq('id', runStoreId);
 
-    const { data: runData } = await supabaseAdmin.from('scrape_runs').select('error_count, completed_stores').eq('id', scrapeRunId).single();
+    const { data: runData } = await supabaseAdmin.from('scrape_runs').select('error_count, completed_stores, pages_visited').eq('id', scrapeRunId).single();
     if (runData) {
       await supabaseAdmin.from('scrape_runs').update({
         error_count: (runData.error_count || 0) + 1,
         completed_stores: (runData.completed_stores || 0) + 1,
+        pages_visited: (runData.pages_visited || 0) + pagesVisited,
         run_status: 'failed',
       }).eq('id', scrapeRunId);
     }
