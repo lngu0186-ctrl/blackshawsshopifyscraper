@@ -330,7 +330,7 @@ export default function Export() {
 
                 <Button variant="outline" className="w-full h-12 justify-start gap-3"
                   onClick={handleExportReview}>
-                  <AlertTriangle className="w-4 h-4 text-amber-500" />
+                  <AlertTriangle className="w-4 h-4 text-muted-foreground" />
                   <div className="text-left">
                     <p className="text-sm font-medium">Export Review Required CSV</p>
                     <p className="text-xs text-muted-foreground">{reviewCount.toLocaleString()} rows — missing fields column included</p>
