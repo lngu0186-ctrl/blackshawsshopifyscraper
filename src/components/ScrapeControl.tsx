@@ -43,7 +43,7 @@ function StallBanner({ level, onSkip, onCancel }: { level: 'warn' | 'critical'; 
       'flex items-center gap-3 px-4 py-2 rounded-lg text-[12px] font-medium border',
       isCrit
         ? 'bg-destructive/10 text-destructive border-destructive/30'
-        : 'bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 border-yellow-500/30',
+        : 'bg-warning/10 text-warning border-warning/30',
     )}>
       <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
       <span className="flex-1">
