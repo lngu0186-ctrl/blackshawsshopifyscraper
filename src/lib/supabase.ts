@@ -1,11 +1,3 @@
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string;
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
-}
-
-// Use untyped client to avoid complex generic issues while maintaining full functionality
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+// Re-export the auto-configured Supabase client from the integration layer.
+// This avoids duplicating client creation and ensures the correct env vars are used.
+export { supabase } from '@/integrations/supabase/client';
