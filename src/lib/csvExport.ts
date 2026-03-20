@@ -84,10 +84,13 @@ export const PRICE_HISTORY_CSV_HEADERS = [
 export type PriceHistoryCsvHeader = typeof PRICE_HISTORY_CSV_HEADERS[number];
 export type PriceHistoryCsvRow = Record<PriceHistoryCsvHeader, string>;
 
+// Review Required CSV — Shopify columns + 2 extra
+export const REVIEW_REQUIRED_EXTRA_HEADERS = ["Confidence Score", "Missing Fields"] as const;
+export const REVIEW_REQUIRED_HEADERS = [...SHOPIFY_CSV_HEADERS, ...REVIEW_REQUIRED_EXTRA_HEADERS] as const;
+
 // --- Helpers ---
 
 function escapeCell(value: string): string {
-  // RFC 4180: if contains comma, quote, or newline → wrap in quotes and double internal quotes
   if (value.includes('"') || value.includes(',') || value.includes('\n') || value.includes('\r')) {
     return '"' + value.replace(/"/g, '""') + '"';
   }
@@ -99,7 +102,6 @@ export function serializeCsv(rows: Record<string, string>[], headers: readonly s
   const dataLines = rows.map(row =>
     headers.map(h => escapeCell(row[h] ?? '')).join(',')
   );
-  // UTF-8 BOM + CRLF line endings
   return '\uFEFF' + [headerLine, ...dataLines].join('\r\n');
 }
 
@@ -130,7 +132,6 @@ export function buildShopifyCsvRows(
     const isFirst = vIdx === 0;
     const row = emptyRow();
 
-    // URL handle on every row
     row["URL handle"] = urlHandle;
 
     if (isFirst) {
@@ -175,7 +176,6 @@ export function buildShopifyCsvRows(
     row["Requires shipping"] = 'TRUE';
     row["Fulfillment service"] = 'manual';
 
-    // First variant gets first image
     if (isFirst && images.length > 0) {
       row["Product image URL"] = images[0].src || '';
       row["Image position"] = '1';
@@ -201,7 +201,6 @@ export function buildShopifyCsvRows(
     rows.push(row);
   });
 
-  // Extra image rows (images beyond index 0, no duplicate)
   for (let i = 1; i < images.length; i++) {
     const row = emptyRow();
     row["URL handle"] = urlHandle;
@@ -231,6 +230,113 @@ export function buildPriceHistoryCsvRow(h: any, productTitle: string, urlHandle:
     "Recorded at": h.recorded_at || '',
     "Scrape run ID": h.scrape_run_id || '',
   };
+}
+
+// ─── Scraped Products → Shopify CSV ─────────────────────────────────────────
+
+import type { ScrapedProduct } from '@/hooks/useScrapedProducts';
+
+function slugify(str: string): string {
+  return str
+    .toLowerCase()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-|-$/g, '');
+}
+
+function emptyShopifyRow(): ShopifyCsvRow {
+  const row: any = {};
+  for (const h of SHOPIFY_CSV_HEADERS) row[h] = '';
+  return row as ShopifyCsvRow;
+}
+
+export function buildShopifyRowFromScrapedProduct(p: ScrapedProduct): ShopifyCsvRow[] {
+  const rows: ShopifyCsvRow[] = [];
+  const handle = p.external_id
+    ? `${p.source_key}-${p.external_id}`
+    : `${p.source_key}-${slugify(p.title).substring(0, 60)}`;
+
+  const row = emptyShopifyRow();
+  row["Title"] = p.title;
+  row["URL handle"] = handle;
+  row["Description"] = p.description_html ?? '';
+  row["Vendor"] = p.brand ?? '';
+  row["Product category"] = p.category ?? '';
+  row["Type"] = p.category ?? '';
+  row["Tags"] = [...(p.tags ?? []), p.source_name, 'au-pharmacy-scout'].join(', ');
+  row["Published on online store"] = 'TRUE';
+  row["Status"] = 'active';
+  row["SKU"] = p.sku ?? '';
+  row["Barcode"] = p.gtin ?? '';
+  row["Option1 name"] = 'Title';
+  row["Option1 value"] = 'Default Title';
+  // Price — NEVER blank in Shopify Ready export (caller must filter price != null)
+  row["Price"] = p.price != null ? Number(p.price).toFixed(2) : '';
+  row["Compare-at price"] = p.was_price != null ? Number(p.was_price).toFixed(2) : '';
+  row["Charge tax"] = 'TRUE';
+  row["Inventory quantity"] = '0';
+  row["Continue selling when out of stock"] = 'DENY';
+  row["Weight value (grams)"] = '0';
+  row["Weight unit for display"] = 'g';
+  row["Requires shipping"] = 'TRUE';
+  row["Fulfillment service"] = 'manual';
+  row["Gift card"] = 'FALSE';
+  row["Product image URL"] = p.image_url ?? '';
+  row["Image position"] = p.image_url ? '1' : '';
+  row["Image alt text"] = p.image_url ? p.title : '';
+  row["SEO title"] = p.title.substring(0, 70);
+  row["SEO description"] = (p.description_plain ?? '').substring(0, 320);
+  rows.push(row);
+
+  // Additional image rows
+  const extraImages = (p.image_urls ?? []).filter(u => u !== p.image_url);
+  extraImages.forEach((imgUrl, i) => {
+    const imgRow = emptyShopifyRow();
+    imgRow["URL handle"] = handle;
+    imgRow["Product image URL"] = imgUrl;
+    imgRow["Image position"] = String(i + 2);
+    imgRow["Image alt text"] = p.title;
+    rows.push(imgRow);
+  });
+
+  return rows;
+}
+
+export function buildReviewRequiredRow(p: ScrapedProduct): Record<string, string> {
+  const shopifyRows = buildShopifyRowFromScrapedProduct(p);
+  const firstRow = shopifyRows[0] as Record<string, string>;
+  return {
+    ...firstRow,
+    'Confidence Score': String(p.confidence_score),
+    'Missing Fields': (p.missing_fields ?? []).join('; '),
+  };
+}
+
+// ─── Export mode builders ────────────────────────────────────────────────────
+
+export function exportShopifyReadyCsv(products: ScrapedProduct[]): void {
+  // Only products with price
+  const eligible = products.filter(p => p.confidence_score >= 90 && p.price != null);
+  if (eligible.length === 0) {
+    return;
+  }
+  const rows: Record<string, string>[] = [];
+  for (const p of eligible) {
+    rows.push(...buildShopifyRowFromScrapedProduct(p));
+  }
+  const csv = serializeCsv(rows, SHOPIFY_CSV_HEADERS);
+  downloadBlob(csv, `shopify-ready-${Date.now()}.csv`);
+}
+
+export function exportReviewRequiredCsv(products: ScrapedProduct[]): void {
+  const eligible = products.filter(
+    p => (p.confidence_score >= 60 && p.confidence_score < 90) || p.price == null,
+  );
+  const rows: Record<string, string>[] = eligible.map(buildReviewRequiredRow);
+  const headers = [...SHOPIFY_CSV_HEADERS, ...REVIEW_REQUIRED_EXTRA_HEADERS] as readonly string[];
+  const csv = serializeCsv(rows, headers);
+  downloadBlob(csv, `review-required-${Date.now()}.csv`);
 }
 
 export function downloadBlob(content: string, filename: string, mimeType = 'text/csv;charset=utf-8;') {

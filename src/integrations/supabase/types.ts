@@ -265,6 +265,51 @@ export type Database = {
           },
         ]
       }
+      scrape_jobs: {
+        Row: {
+          created_at: string
+          error: string | null
+          finished_at: string | null
+          id: string
+          job_type: string
+          source_key: string
+          started_at: string | null
+          status: string
+          total_discovered: number
+          total_enriched: number
+          total_failed: number
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type?: string
+          source_key: string
+          started_at?: string | null
+          status?: string
+          total_discovered?: number
+          total_enriched?: number
+          total_failed?: number
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          error?: string | null
+          finished_at?: string | null
+          id?: string
+          job_type?: string
+          source_key?: string
+          started_at?: string | null
+          status?: string
+          total_discovered?: number
+          total_enriched?: number
+          total_failed?: number
+          user_id?: string
+        }
+        Relationships: []
+      }
       scrape_logs: {
         Row: {
           created_at: string
@@ -411,6 +456,129 @@ export type Database = {
           total_stores?: number
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      scraped_products: {
+        Row: {
+          availability_text: string | null
+          brand: string | null
+          category: string | null
+          category_path: string[]
+          confidence_score: number
+          currency: string
+          description_html: string | null
+          description_plain: string | null
+          detail_fetch_attempts: number
+          detail_fetch_error: string | null
+          detail_scraped: boolean
+          enriched_at: string | null
+          external_id: string | null
+          first_seen_at: string
+          gtin: string | null
+          id: string
+          image_url: string | null
+          image_urls: string[]
+          in_stock: boolean | null
+          last_exported_at: string | null
+          listing_scraped: boolean
+          missing_fields: string[]
+          price: number | null
+          price_text: string | null
+          raw_detail: Json | null
+          raw_listing: Json | null
+          scrape_method: string
+          scrape_status: string
+          scraped_at: string
+          size_text: string | null
+          sku: string | null
+          source_key: string
+          source_name: string
+          source_url: string
+          tags: string[]
+          title: string
+          user_id: string
+          was_price: number | null
+        }
+        Insert: {
+          availability_text?: string | null
+          brand?: string | null
+          category?: string | null
+          category_path?: string[]
+          confidence_score?: number
+          currency?: string
+          description_html?: string | null
+          description_plain?: string | null
+          detail_fetch_attempts?: number
+          detail_fetch_error?: string | null
+          detail_scraped?: boolean
+          enriched_at?: string | null
+          external_id?: string | null
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          image_url?: string | null
+          image_urls?: string[]
+          in_stock?: boolean | null
+          last_exported_at?: string | null
+          listing_scraped?: boolean
+          missing_fields?: string[]
+          price?: number | null
+          price_text?: string | null
+          raw_detail?: Json | null
+          raw_listing?: Json | null
+          scrape_method?: string
+          scrape_status?: string
+          scraped_at?: string
+          size_text?: string | null
+          sku?: string | null
+          source_key: string
+          source_name: string
+          source_url: string
+          tags?: string[]
+          title: string
+          user_id: string
+          was_price?: number | null
+        }
+        Update: {
+          availability_text?: string | null
+          brand?: string | null
+          category?: string | null
+          category_path?: string[]
+          confidence_score?: number
+          currency?: string
+          description_html?: string | null
+          description_plain?: string | null
+          detail_fetch_attempts?: number
+          detail_fetch_error?: string | null
+          detail_scraped?: boolean
+          enriched_at?: string | null
+          external_id?: string | null
+          first_seen_at?: string
+          gtin?: string | null
+          id?: string
+          image_url?: string | null
+          image_urls?: string[]
+          in_stock?: boolean | null
+          last_exported_at?: string | null
+          listing_scraped?: boolean
+          missing_fields?: string[]
+          price?: number | null
+          price_text?: string | null
+          raw_detail?: Json | null
+          raw_listing?: Json | null
+          scrape_method?: string
+          scrape_status?: string
+          scraped_at?: string
+          size_text?: string | null
+          sku?: string | null
+          source_key?: string
+          source_name?: string
+          source_url?: string
+          tags?: string[]
+          title?: string
+          user_id?: string
+          was_price?: number | null
         }
         Relationships: []
       }
