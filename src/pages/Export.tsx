@@ -274,31 +274,63 @@ export default function Export() {
   const { exportShopifyCsv, exportJson, exportExcel, exportPriceHistoryCsv } = useExport();
   const storeIds = scope === 'selected' ? selectedStoreIds : undefined;
 
-  // Scraped products export
-  const { data: allProductsData } = useScrapedProducts({ pageSize: 10000 });
-  const allProducts = allProductsData?.data ?? [];
-  const readyCount = allProducts.filter(p => p.confidence_score >= 90 && p.price != null).length;
-  const reviewCount = allProducts.filter(p => (p.confidence_score >= 60 && p.confidence_score < 90) || p.price == null).length;
+  // Use canonical pipeline stats for all counts — same source as Dashboard
+  const { data: pipeline, isLoading: pipelineLoading } = usePipelineStats();
+  const readyCount    = pipeline?.readyCount ?? 0;
+  const reviewCount   = pipeline?.reviewRequired ?? 0;
+  const totalProducts = pipeline?.discovered ?? 0;
   const enrichMutation = useEnrichProducts();
 
-  function handleExportReady() {
-    const eligible = allProducts.filter(p => p.confidence_score >= 90 && p.price != null);
+  // Lazy-load all products only when export is triggered
+  async function fetchAllForExport(minScore?: number, maxScore?: number, requirePrice?: boolean) {
+    const { useAuth: _u, ..._ } = await import('@/hooks/useAuth');
+    // Use supabase directly with paginated loop
+    const { supabase: sb } = await import('@/lib/supabase');
+    const { data: { session } } = await sb.auth.getSession();
+    if (!session) return [];
+    let all: any[] = [];
+    let from = 0;
+    const batchSize = 500;
+    while (true) {
+      let q = sb
+        .from('scraped_products')
+        .select('*')
+        .eq('user_id', session.user.id)
+        .range(from, from + batchSize - 1);
+      if (minScore != null) q = q.gte('confidence_score', minScore);
+      if (maxScore != null) q = q.lt('confidence_score', maxScore);
+      if (requirePrice) q = q.not('price', 'is', null);
+      const { data } = await q;
+      if (!data || data.length === 0) break;
+      all = [...all, ...data];
+      if (data.length < batchSize) break;
+      from += batchSize;
+    }
+    return all;
+  }
+
+  async function handleExportReady() {
+    toast.info('Fetching export-ready products…');
+    const eligible = await fetchAllForExport(90, undefined, true);
     if (eligible.length === 0) { toast.info('No Shopify-ready products to export'); return; }
-    exportShopifyReadyCsv(eligible);
+    exportShopifyReadyCsv(eligible as any);
     toast.success(`Exported ${eligible.length} Shopify-ready rows`);
   }
 
-  function handleExportReview() {
-    const eligible = allProducts.filter(p => (p.confidence_score >= 60 && p.confidence_score < 90) || p.price == null);
+  async function handleExportReview() {
+    toast.info('Fetching review-required products…');
+    const eligible = await fetchAllForExport(60, 90, false);
     if (eligible.length === 0) { toast.info('No review-required products'); return; }
-    exportReviewRequiredCsv(eligible);
+    exportReviewRequiredCsv(eligible as any);
     toast.success(`Exported ${eligible.length} review-required rows`);
   }
 
-  function handleExportRaw() {
-    if (allProducts.length === 0) { toast.info('No products to export'); return; }
-    exportFullRawExcel(allProducts);
-    toast.success(`Exporting ${allProducts.length} rows as Excel`);
+  async function handleExportRaw() {
+    toast.info('Fetching all products for Excel export…');
+    const all = await fetchAllForExport();
+    if (all.length === 0) { toast.info('No products to export'); return; }
+    exportFullRawExcel(all as any);
+    toast.success(`Exported ${all.length} rows as Excel`);
   }
 
   return (
