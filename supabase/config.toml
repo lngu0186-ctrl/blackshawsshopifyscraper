@@ -21,3 +21,6 @@ verify_jwt = false
 [functions.enrich-products]
 verify_jwt = false
 
+[functions.analyze-failure]
+verify_jwt = false
+

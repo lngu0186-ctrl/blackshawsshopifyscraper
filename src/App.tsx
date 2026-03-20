@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import Products from "./pages/Products";
 import PriceChanges from "./pages/PriceChanges";
 import Export from "./pages/Export";
+import Diagnostics from "./pages/Diagnostics";
 import SettingsPage from "./pages/Settings";
 import StoreDetail from "./pages/StoreDetail";
 import Auth from "./pages/Auth";
@@ -44,6 +45,7 @@ function AppLayout() {
           <Route path="/products" element={<Products />} />
           <Route path="/price-changes" element={<PriceChanges />} />
           <Route path="/export" element={<Export />} />
+          <Route path="/diagnostics" element={<Diagnostics />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/stores/:id" element={<StoreDetail />} />
           <Route path="*" element={<NotFound />} />
