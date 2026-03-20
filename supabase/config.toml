@@ -1,1 +1,13 @@
 project_id = "esqexlqwrndagoyqhnff"
+
+[functions.validate-store]
+verify_jwt = false
+
+[functions.seed-stores]
+verify_jwt = false
+
+[functions.scrape-store]
+verify_jwt = false
+
+[functions.cancel-scrape]
+verify_jwt = false
