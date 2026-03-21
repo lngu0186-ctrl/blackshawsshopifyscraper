@@ -43,6 +43,7 @@ const NAV_SECTIONS = [
       { to: '/export', icon: Download, label: 'Exports', end: false },
       { to: '/diagnostics', icon: Stethoscope, label: 'Diagnostics', end: false },
       { to: '/scraping-audit', icon: SearchCode, label: 'Scraping Audit', end: false },
+      { to: '/cw-import', icon: ShoppingCart, label: 'CW Import', end: false },
     ],
   },
   {
