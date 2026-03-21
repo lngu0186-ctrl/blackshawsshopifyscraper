@@ -35,6 +35,8 @@ export interface CWImportRow {
   cw_category_path: string | null;
   cw_currency: string | null;
   cw_updated_at: string | null;
+  cw_source: string | null;
+  cw_slug: string | null;
   match_status: string;
   match_method: string | null;
   match_confidence: number | null;
