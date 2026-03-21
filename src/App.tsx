@@ -15,6 +15,9 @@ import StoreDetail from "./pages/StoreDetail";
 import ScrapingAudit from "./pages/ScrapingAudit";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import CWImportUploadPage from "./pages/cw-import/index";
+import CWImportListPage from "./pages/cw-import/history";
+import CWImportReviewPage from "./pages/cw-import/[jobId]";
 import { Loader2 } from "lucide-react";
 
 const queryClient = new QueryClient({
@@ -50,6 +53,10 @@ function AppLayout() {
           <Route path="/scraping-audit" element={<ScrapingAudit />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/stores/:id" element={<StoreDetail />} />
+          {/* CW Import pipeline */}
+          <Route path="/cw-import" element={<CWImportUploadPage />} />
+          <Route path="/cw-import/history" element={<CWImportListPage />} />
+          <Route path="/cw-import/:jobId" element={<CWImportReviewPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>

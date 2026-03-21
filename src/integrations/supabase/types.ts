@@ -14,6 +14,242 @@ export type Database = {
   }
   public: {
     Tables: {
+      cw_import_jobs: {
+        Row: {
+          ambiguous_rows: number
+          completed_at: string | null
+          created_at: string
+          created_by: string
+          error_summary: string | null
+          file_name: string
+          id: string
+          invalid_rows: number
+          matched_rows: number
+          new_rows: number
+          skipped_rows: number
+          status: string
+          total_rows: number
+          updated_at: string
+        }
+        Insert: {
+          ambiguous_rows?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by: string
+          error_summary?: string | null
+          file_name: string
+          id?: string
+          invalid_rows?: number
+          matched_rows?: number
+          new_rows?: number
+          skipped_rows?: number
+          status?: string
+          total_rows?: number
+          updated_at?: string
+        }
+        Update: {
+          ambiguous_rows?: number
+          completed_at?: string | null
+          created_at?: string
+          created_by?: string
+          error_summary?: string | null
+          file_name?: string
+          id?: string
+          invalid_rows?: number
+          matched_rows?: number
+          new_rows?: number
+          skipped_rows?: number
+          status?: string
+          total_rows?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      cw_import_rows: {
+        Row: {
+          candidate_matches: Json
+          created_at: string
+          cw_brand: string | null
+          cw_category_path: string | null
+          cw_currency: string | null
+          cw_image_url: string | null
+          cw_in_stock: boolean | null
+          cw_name: string | null
+          cw_price_cents: number | null
+          cw_product_id: string | null
+          cw_review_count: number | null
+          cw_review_rating: number | null
+          cw_rrp_cents: number | null
+          cw_sku: string | null
+          cw_slug: string | null
+          cw_source: string | null
+          cw_updated_at: string | null
+          cw_url: string | null
+          id: string
+          import_job_id: string
+          match_confidence: number | null
+          match_method: string | null
+          match_status: string
+          matched_record_id: string | null
+          normalized_brand: string | null
+          normalized_name: string | null
+          normalized_slug: string | null
+          raw_data: Json
+          resolution_action: string | null
+          resolved_at: string | null
+          row_number: number
+          updated_at: string
+          validation_errors: Json
+        }
+        Insert: {
+          candidate_matches?: Json
+          created_at?: string
+          cw_brand?: string | null
+          cw_category_path?: string | null
+          cw_currency?: string | null
+          cw_image_url?: string | null
+          cw_in_stock?: boolean | null
+          cw_name?: string | null
+          cw_price_cents?: number | null
+          cw_product_id?: string | null
+          cw_review_count?: number | null
+          cw_review_rating?: number | null
+          cw_rrp_cents?: number | null
+          cw_sku?: string | null
+          cw_slug?: string | null
+          cw_source?: string | null
+          cw_updated_at?: string | null
+          cw_url?: string | null
+          id?: string
+          import_job_id: string
+          match_confidence?: number | null
+          match_method?: string | null
+          match_status?: string
+          matched_record_id?: string | null
+          normalized_brand?: string | null
+          normalized_name?: string | null
+          normalized_slug?: string | null
+          raw_data?: Json
+          resolution_action?: string | null
+          resolved_at?: string | null
+          row_number: number
+          updated_at?: string
+          validation_errors?: Json
+        }
+        Update: {
+          candidate_matches?: Json
+          created_at?: string
+          cw_brand?: string | null
+          cw_category_path?: string | null
+          cw_currency?: string | null
+          cw_image_url?: string | null
+          cw_in_stock?: boolean | null
+          cw_name?: string | null
+          cw_price_cents?: number | null
+          cw_product_id?: string | null
+          cw_review_count?: number | null
+          cw_review_rating?: number | null
+          cw_rrp_cents?: number | null
+          cw_sku?: string | null
+          cw_slug?: string | null
+          cw_source?: string | null
+          cw_updated_at?: string | null
+          cw_url?: string | null
+          id?: string
+          import_job_id?: string
+          match_confidence?: number | null
+          match_method?: string | null
+          match_status?: string
+          matched_record_id?: string | null
+          normalized_brand?: string | null
+          normalized_name?: string | null
+          normalized_slug?: string | null
+          raw_data?: Json
+          resolution_action?: string | null
+          resolved_at?: string | null
+          row_number?: number
+          updated_at?: string
+          validation_errors?: Json
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cw_import_rows_import_job_id_fkey"
+            columns: ["import_job_id"]
+            isOneToOne: false
+            referencedRelation: "cw_import_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cw_products: {
+        Row: {
+          brand: string | null
+          category_path: string | null
+          created_at: string
+          currency: string | null
+          cw_product_id: string
+          cw_sku: string | null
+          cw_slug: string | null
+          cw_source: string | null
+          cw_updated_at: string | null
+          cw_url: string | null
+          id: string
+          image_url: string | null
+          in_stock: boolean | null
+          last_imported_at: string
+          name: string
+          price_cents: number | null
+          review_count: number | null
+          review_rating: number | null
+          rrp_cents: number | null
+          updated_at: string
+        }
+        Insert: {
+          brand?: string | null
+          category_path?: string | null
+          created_at?: string
+          currency?: string | null
+          cw_product_id: string
+          cw_sku?: string | null
+          cw_slug?: string | null
+          cw_source?: string | null
+          cw_updated_at?: string | null
+          cw_url?: string | null
+          id?: string
+          image_url?: string | null
+          in_stock?: boolean | null
+          last_imported_at?: string
+          name: string
+          price_cents?: number | null
+          review_count?: number | null
+          review_rating?: number | null
+          rrp_cents?: number | null
+          updated_at?: string
+        }
+        Update: {
+          brand?: string | null
+          category_path?: string | null
+          created_at?: string
+          currency?: string | null
+          cw_product_id?: string
+          cw_sku?: string | null
+          cw_slug?: string | null
+          cw_source?: string | null
+          cw_updated_at?: string | null
+          cw_url?: string | null
+          id?: string
+          image_url?: string | null
+          in_stock?: boolean | null
+          last_imported_at?: string
+          name?: string
+          price_cents?: number | null
+          review_count?: number | null
+          review_rating?: number | null
+          rrp_cents?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       export_runs: {
         Row: {
           changed_only: boolean
