@@ -5,6 +5,7 @@ import {
   Activity, Settings, Plus, Loader2, ToggleLeft, ToggleRight,
   Trash2, Pill, ChevronDown, ChevronUp, LogOut, Lock, ShieldAlert,
   Store, Stethoscope, CheckCheck, XCircle, AlertTriangle, Filter, SearchCode,
+  ShoppingCart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
