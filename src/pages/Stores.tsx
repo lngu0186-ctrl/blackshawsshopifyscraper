@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
-import { ExternalLink, Lock, ShieldAlert, Store as StoreIcon } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, Lock, ShieldAlert, Store as StoreIcon, XCircle } from 'lucide-react';
 import { useStores } from '@/hooks/useStores';
+import { useStoreDiagnostics } from '@/hooks/useStoreDiagnostics';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -12,8 +13,35 @@ function statusTone(validationStatus: string, enabled: boolean) {
   return 'bg-muted text-muted-foreground';
 }
 
+function diagnosticTone(status?: string) {
+  switch (status) {
+    case 'productive':
+      return 'bg-success/10 text-success';
+    case 'stale':
+    case 'zero_products':
+    case 'auth_required':
+      return 'bg-warning/10 text-warning';
+    case 'blocked':
+    case 'failing':
+    case 'invalid':
+      return 'bg-destructive/10 text-destructive';
+    case 'disabled':
+    case 'never_scraped':
+    case 'unknown':
+    default:
+      return 'bg-muted text-muted-foreground';
+  }
+}
+
+function DiagnosticIcon({ status }: { status?: string }) {
+  if (status === 'productive') return <CheckCircle2 className="w-3.5 h-3.5" />;
+  if (status === 'blocked' || status === 'failing' || status === 'invalid') return <XCircle className="w-3.5 h-3.5" />;
+  return <AlertTriangle className="w-3.5 h-3.5" />;
+}
+
 export default function Stores() {
   const { data: stores, isLoading } = useStores();
+  const { data: diagnostics, isLoading: diagnosticsLoading } = useStoreDiagnostics(stores);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl">
@@ -21,7 +49,7 @@ export default function Stores() {
         <div>
           <h1 className="text-2xl font-bold">Stores</h1>
           <p className="text-sm text-muted-foreground">
-            Source stores, validation state, auth requirements, and current product counts.
+            Source stores, truthful scrape diagnostics, auth blockers, and current product counts.
           </p>
         </div>
         <Button asChild variant="outline" size="sm">
@@ -44,6 +72,7 @@ export default function Stores() {
               ? <ShieldAlert className="w-3.5 h-3.5" />
               : <Lock className="w-3.5 h-3.5" />
             : null;
+          const diagnostic = diagnostics?.[store.id];
 
           return (
             <Link
@@ -65,6 +94,10 @@ export default function Stores() {
               <div className="mt-4 flex flex-wrap gap-2">
                 <span className={`text-[11px] px-2 py-1 rounded-full font-medium ${statusTone(store.validation_status, store.enabled)}`}>
                   {store.enabled ? store.validation_status : 'disabled'}
+                </span>
+                <span className={`text-[11px] px-2 py-1 rounded-full inline-flex items-center gap-1 font-medium ${diagnosticTone(diagnostic?.status)}`}>
+                  <DiagnosticIcon status={diagnostic?.status} />
+                  {diagnosticsLoading ? 'Checking diagnostics…' : diagnostic?.label ?? 'Unknown'}
                 </span>
                 <span className="text-[11px] px-2 py-1 rounded-full bg-muted text-muted-foreground">
                   {store.total_products?.toLocaleString?.() ?? 0} products
@@ -88,6 +121,17 @@ export default function Stores() {
                     {store.last_scraped_at ? new Date(store.last_scraped_at).toLocaleString() : 'Never'}
                   </span>
                 </p>
+                {diagnostic && (
+                  <>
+                    <p>
+                      Diagnostics: <span className="text-foreground">{diagnostic.reason}</span>
+                    </p>
+                    <p>
+                      Recent issues: <span className="text-foreground">{diagnostic.failuresLast7Days} errors</span>
+                      {diagnostic.latestRunStatus && <> · latest run <span className="text-foreground">{diagnostic.latestRunStatus}</span></>}
+                    </p>
+                  </>
+                )}
               </div>
             </Link>
           );

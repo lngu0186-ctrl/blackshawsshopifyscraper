@@ -17,10 +17,12 @@ export interface StoreHealthMetrics {
   missingDescriptionPct: number;
   missingPricePct: number;
   failuresLast7Days: number;
-  healthBadge: 'healthy' | 'degraded' | 'failing' | 'blocked' | 'auth_required' | 'unknown';
+  warningsLast7Days: number;
+  latestErrorMessage: string | null;
+  healthBadge: 'healthy' | 'degraded' | 'failing' | 'blocked' | 'auth_required' | 'zero_products' | 'stale' | 'unknown';
 }
 
-export function useStoreHealth(storeId: string | null | undefined) {
+export function useStoreHealth(storeId: string | null | undefined, store?: any) {
   const { user } = useAuth();
 
   return useQuery({
@@ -39,6 +41,8 @@ export function useStoreHealth(storeId: string | null | undefined) {
         missingDescRes,
         missingPriceRes,
         failuresRes,
+        warningsRes,
+        latestErrorRes,
       ] = await Promise.all([
         supabase
           .from('products')
@@ -88,6 +92,22 @@ export function useStoreHealth(storeId: string | null | undefined) {
           .eq('store_id', storeId!)
           .in('severity', ['error', 'critical'])
           .gte('created_at', since7d),
+        supabase
+          .from('scraper_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('user_id', user!.id)
+          .eq('store_id', storeId!)
+          .eq('severity', 'warning')
+          .gte('created_at', since7d),
+        supabase
+          .from('scraper_events')
+          .select('message, reason_code, created_at')
+          .eq('user_id', user!.id)
+          .eq('store_id', storeId!)
+          .in('severity', ['error', 'critical'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
       ]);
 
       const total = discoveredRes.count ?? 0;
@@ -99,16 +119,26 @@ export function useStoreHealth(storeId: string | null | undefined) {
       const missingPrice = missingPriceRes.count ?? 0;
       const failures7d = failuresRes.count ?? 0;
 
+      const warnings7d = warningsRes.count ?? 0;
+      const latestErrorMessage = latestErrorRes.data?.reason_code || latestErrorRes.data?.message || null;
       const missingImagePct = total > 0 ? Math.round((missingImage / total) * 100) : 0;
       const missingDescPct = total > 0 ? Math.round((missingDesc / total) * 100) : 0;
       const missingPricePct = total > 0 ? Math.round((missingPrice / total) * 100) : 0;
 
-      // Health badge logic
+      // Health badge logic: prefer truthful operational states before coverage quality.
       let healthBadge: StoreHealthMetrics['healthBadge'] = 'unknown';
-      if (total === 0) {
-        healthBadge = 'unknown';
+      if (store?.requires_auth && store?.auth_status !== 'authenticated') {
+        healthBadge = 'auth_required';
+      } else if (store?.antibot_suspected || store?.validation_status === 'restricted' || store?.validation_status === 'password_protected') {
+        healthBadge = 'blocked';
+      } else if (store?.last_scraped_at && (Date.now() - new Date(store.last_scraped_at).getTime()) / (1000 * 60 * 60 * 24) > 14) {
+        healthBadge = 'stale';
+      } else if (store?.last_scraped_at && total === 0) {
+        healthBadge = 'zero_products';
       } else if (failures7d >= 3) {
         healthBadge = 'failing';
+      } else if (total === 0) {
+        healthBadge = 'unknown';
       } else if (
         missingImagePct < 20 &&
         missingDescPct < 20 &&
@@ -131,6 +161,8 @@ export function useStoreHealth(storeId: string | null | undefined) {
         missingDescriptionPct: missingDescPct,
         missingPricePct,
         failuresLast7Days: failures7d,
+        warningsLast7Days: warnings7d,
+        latestErrorMessage,
         healthBadge,
       };
     },

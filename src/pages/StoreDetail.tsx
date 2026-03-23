@@ -27,6 +27,8 @@ function HealthBadge({ status }: { status: string }) {
     failing:      { label: 'Failing',      cls: 'bg-destructive/15 text-destructive border-destructive/30', icon: XCircle },
     blocked:      { label: 'Blocked',      cls: 'bg-destructive/15 text-destructive border-destructive/30', icon: ShieldAlert },
     auth_required:{ label: 'Auth Required', cls: 'bg-warning/15 text-warning border-warning/30',         icon: ShieldAlert },
+    zero_products:{ label: 'Zero Products', cls: 'bg-warning/15 text-warning border-warning/30',         icon: AlertTriangle },
+    stale:        { label: 'Stale',        cls: 'bg-warning/15 text-warning border-warning/30',         icon: Clock },
     unknown:      { label: 'Unknown',      cls: 'bg-muted text-muted-foreground border-border',          icon: Activity },
   };
   const s = map[status] ?? map.unknown;
@@ -69,7 +71,7 @@ export default function StoreDetail() {
   const store = stores?.find(s => s.id === id);
   const { data: metrics } = useStoreMetricsHistory(id ?? null);
   const { data: _productsData } = useProducts({ page: 1, pageSize: 5, storeId: id, sortBy: 'scraped_at', sortDir: 'desc' });
-  const { data: health, isLoading: healthLoading } = useStoreHealth(id);
+  const { data: health, isLoading: healthLoading } = useStoreHealth(id, store);
 
   if (!store) return (
     <div className="flex items-center justify-center h-64">
@@ -191,25 +193,40 @@ export default function StoreDetail() {
 
         {/* Failures */}
         {health && (
-          <div className="flex items-center gap-4 text-[11px] pt-1 border-t border-border">
-            <div className="flex items-center gap-1.5">
-              <Activity className="w-3.5 h-3.5 text-muted-foreground" />
-              <span className="text-muted-foreground">Failures last 7 days:</span>
-              <span className={cn('font-bold tabular-nums',
-                health.failuresLast7Days >= 3 ? 'text-destructive' : health.failuresLast7Days > 0 ? 'text-warning' : 'text-success'
-              )}>
-                {health.failuresLast7Days}
-              </span>
+          <div className="space-y-2 pt-1 border-t border-border">
+            <div className="flex items-center gap-4 text-[11px] flex-wrap">
+              <div className="flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Failures last 7 days:</span>
+                <span className={cn('font-bold tabular-nums',
+                  health.failuresLast7Days >= 3 ? 'text-destructive' : health.failuresLast7Days > 0 ? 'text-warning' : 'text-success'
+                )}>
+                  {health.failuresLast7Days}
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <AlertTriangle className="w-3.5 h-3.5 text-muted-foreground" />
+                <span className="text-muted-foreground">Warnings last 7 days:</span>
+                <span className={cn('font-bold tabular-nums', health.warningsLast7Days > 0 ? 'text-warning' : 'text-success')}>
+                  {health.warningsLast7Days}
+                </span>
+              </div>
+              {(store as any).antibot_suspected && (
+                <span className="text-warning flex items-center gap-1">
+                  <ShieldAlert className="w-3.5 h-3.5" /> Anti-bot suspected
+                </span>
+              )}
+              {store.last_scraped_at && (
+                <div className="flex items-center gap-1.5 ml-auto">
+                  <Clock className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span className="text-muted-foreground">Last scraped {new Date(store.last_scraped_at).toLocaleDateString()}</span>
+                </div>
+              )}
             </div>
-            {(store as any).antibot_suspected && (
-              <span className="text-warning flex items-center gap-1">
-                <ShieldAlert className="w-3.5 h-3.5" /> Anti-bot suspected
-              </span>
-            )}
-            {store.last_scraped_at && (
-              <div className="flex items-center gap-1.5 ml-auto">
-                <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="text-muted-foreground">Last scraped {new Date(store.last_scraped_at).toLocaleDateString()}</span>
+            {health.latestErrorMessage && (
+              <div className="rounded-xl border border-warning/30 bg-warning/5 px-3 py-2 text-[11px]">
+                <span className="font-semibold text-warning">Latest issue:</span>{' '}
+                <span className="text-foreground">{health.latestErrorMessage}</span>
               </div>
             )}
           </div>
