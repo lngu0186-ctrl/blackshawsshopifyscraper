@@ -22,6 +22,31 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 1d diagnostics page becomes store-first risk queue
+
+### Delivered
+- Reworked `/diagnostics` from an event-log-first screen into a **store-first diagnostics queue**
+- Added ranked per-store risk scoring so the most urgent stores sort to the top by default
+- Added store-level filters for risk state and sort mode
+- Added an explicit store diagnostics table with:
+  - risk state
+  - short reason
+  - product count
+  - 7-day error/warning counts
+  - latest run outcome
+  - last scraped timestamp
+- Kept raw scraper events as a lower **Event Evidence** section instead of the main UX
+- Updated page copy to make the purpose operational: triage stores first, inspect events second
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Risk scoring is heuristic and client-derived, not yet backed by a dedicated backend health model
+- Search currently spans both store queue text fields and raw event evidence filters using the same query box
+- Evidence still reflects `scraper_events` quality; if events are sparse, store triage is only as good as current instrumentation
+
 ## 2026-03-24 — Phase 1c store diagnostics truthfulness
 
 ### Delivered

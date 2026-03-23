@@ -1,11 +1,9 @@
-/**
- * Diagnostics page — wired to scraper_events table for live event data.
- * Block 4: Real event counts, event log table, severity/stage/store/date filters.
- */
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useStores } from '@/hooks/useStores';
 import { useAnalyzeFailure } from '@/hooks/useDiagnostics';
 import { useScraperEvents, useScraperEventsSummary, useScraperEventStages } from '@/hooks/useScraperEvents';
+import { useStoreDiagnostics } from '@/hooks/useStoreDiagnostics';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -14,18 +12,17 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  AlertTriangle, XCircle, CheckCircle2, Search,
-  Loader2, ExternalLink, Sparkles,
-  Activity, Clock, Filter, Database, BarChart3,
+  AlertTriangle, ArrowUpDown, CheckCircle2, Clock, ExternalLink,
+  Filter, Loader2, Search, ShieldAlert, Sparkles, Store as StoreIcon,
+  Activity, XCircle, BarChart3,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-// ── Severity badge ─────────────────────────────────────────────────────────────
 function SeverityBadge({ severity }: { severity: string }) {
   const map: Record<string, string> = {
-    info:     'bg-primary/10 text-primary border-primary/30',
-    warning:  'bg-warning/15 text-warning border-warning/30',
-    error:    'bg-destructive/15 text-destructive border-destructive/30',
+    info: 'bg-primary/10 text-primary border-primary/30',
+    warning: 'bg-warning/15 text-warning border-warning/30',
+    error: 'bg-destructive/15 text-destructive border-destructive/30',
     critical: 'bg-destructive/30 text-destructive border-destructive/50 font-bold',
   };
   return (
@@ -35,23 +32,75 @@ function SeverityBadge({ severity }: { severity: string }) {
   );
 }
 
-// ── Stage label prettifier ─────────────────────────────────────────────────────
 function stageLabel(stage: string): string {
   return stage.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 }
 
-// ── Main page ─────────────────────────────────────────────────────────────────
+function riskTone(status?: string) {
+  switch (status) {
+    case 'blocked':
+    case 'failing':
+    case 'invalid':
+      return 'bg-destructive/10 text-destructive border-destructive/30';
+    case 'auth_required':
+    case 'zero_products':
+    case 'stale':
+      return 'bg-warning/10 text-warning border-warning/30';
+    case 'productive':
+      return 'bg-success/10 text-success border-success/30';
+    default:
+      return 'bg-muted text-muted-foreground border-border';
+  }
+}
+
+function RiskIcon({ status }: { status?: string }) {
+  switch (status) {
+    case 'productive':
+      return <CheckCircle2 className="w-3.5 h-3.5" />;
+    case 'blocked':
+      return <ShieldAlert className="w-3.5 h-3.5" />;
+    case 'failing':
+    case 'invalid':
+      return <XCircle className="w-3.5 h-3.5" />;
+    default:
+      return <AlertTriangle className="w-3.5 h-3.5" />;
+  }
+}
+
+function riskScore(row: any) {
+  let score = 0;
+  switch (row.status) {
+    case 'blocked': score += 100; break;
+    case 'failing': score += 90; break;
+    case 'auth_required': score += 80; break;
+    case 'zero_products': score += 70; break;
+    case 'stale': score += 60; break;
+    case 'invalid': score += 50; break;
+    case 'never_scraped': score += 40; break;
+    case 'unknown': score += 30; break;
+    case 'productive': score += 5; break;
+    case 'disabled': score += 0; break;
+  }
+  score += Math.min((row.failuresLast7Days ?? 0) * 6, 30);
+  score += Math.min((row.warningsLast7Days ?? 0) * 2, 10);
+  if ((row.products ?? 0) === 0 && row.status !== 'productive') score += 8;
+  return score;
+}
+
 export default function Diagnostics() {
   const [search, setSearch] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterStage, setFilterStage] = useState('all');
   const [filterStore, setFilterStore] = useState('all');
-  const [filterDate, setFilterDate] = useState<'24h' | '7d' | '30d' | 'all'>('all');
+  const [filterDate, setFilterDate] = useState<'24h' | '7d' | '30d' | 'all'>('7d');
+  const [riskFilter, setRiskFilter] = useState('all');
+  const [sortBy, setSortBy] = useState<'risk' | 'errors' | 'products' | 'name'>('risk');
   const [page, setPage] = useState(1);
   const [runSummaryAnalysis, setRunSummaryAnalysis] = useState<Record<string, any> | null>(null);
 
   const analyzeFailure = useAnalyzeFailure();
-  const { data: stores } = useStores();
+  const { data: stores, isLoading: storesLoading } = useStores();
+  const { data: diagnostics, isLoading: diagnosticsLoading } = useStoreDiagnostics(stores);
   const { data: summary, isLoading: summaryLoading } = useScraperEventsSummary();
   const { data: stages } = useScraperEventStages();
 
@@ -62,14 +111,58 @@ export default function Diagnostics() {
     dateRange: filterDate,
     search: search || undefined,
     page,
-    pageSize: 100,
+    pageSize: 50,
   });
 
   const events = eventsData?.data ?? [];
   const totalCount = eventsData?.count ?? 0;
-  const totalPages = Math.ceil(totalCount / 100);
+  const totalPages = Math.ceil(totalCount / 50);
 
-  const storeNameMap = Object.fromEntries((stores ?? []).map(s => [s.id, s.name]));
+  const storeRows = useMemo(() => {
+    const rows = (stores ?? []).map(store => {
+      const d = diagnostics?.[store.id];
+      return {
+        ...store,
+        ...d,
+        status: d?.status ?? 'unknown',
+        label: d?.label ?? 'Unknown',
+        reason: d?.reason ?? 'No diagnostic summary yet',
+        failuresLast7Days: d?.failuresLast7Days ?? 0,
+        warningsLast7Days: d?.warningsLast7Days ?? 0,
+        latestRunStatus: d?.latestRunStatus ?? null,
+        latestRunAt: d?.latestRunAt ?? null,
+        latestErrorMessage: d?.latestErrorMessage ?? null,
+        risk: riskScore({ ...store, ...d }),
+      };
+    });
+
+    const searchLower = search.trim().toLowerCase();
+    const filtered = rows.filter(row => {
+      if (riskFilter !== 'all' && row.status !== riskFilter) return false;
+      if (!searchLower) return true;
+      return [row.name, row.normalized_url, row.reason, row.latestErrorMessage, row.label]
+        .filter(Boolean)
+        .some(v => String(v).toLowerCase().includes(searchLower));
+    });
+
+    const sorted = [...filtered].sort((a, b) => {
+      if (sortBy === 'name') return a.name.localeCompare(b.name);
+      if (sortBy === 'errors') return (b.failuresLast7Days ?? 0) - (a.failuresLast7Days ?? 0) || b.risk - a.risk;
+      if (sortBy === 'products') return (a.total_products ?? 0) - (b.total_products ?? 0) || b.risk - a.risk;
+      return b.risk - a.risk || (b.failuresLast7Days ?? 0) - (a.failuresLast7Days ?? 0);
+    });
+
+    return sorted;
+  }, [stores, diagnostics, riskFilter, sortBy, search]);
+
+  const riskCounts = useMemo(() => {
+    const rows = Object.values(diagnostics ?? {});
+    return {
+      urgent: rows.filter(r => ['blocked', 'failing', 'auth_required'].includes(r.status)).length,
+      warning: rows.filter(r => ['zero_products', 'stale', 'never_scraped', 'invalid'].includes(r.status)).length,
+      healthy: rows.filter(r => r.status === 'productive').length,
+    };
+  }, [diagnostics]);
 
   async function handleAISummary() {
     if (!summary) return;
@@ -79,21 +172,21 @@ export default function Diagnostics() {
         critical_errors: summary.criticalErrors,
         warnings: summary.warnings,
         failed_stages: summary.failedStages,
+        urgent_stores: riskCounts.urgent,
       },
     });
     setRunSummaryAnalysis(res.analysis);
   }
 
-  const isEmpty = !summaryLoading && summary?.totalEvents === 0;
+  const isEmpty = !summaryLoading && summary?.totalEvents === 0 && !storesLoading;
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      {/* Top bar */}
       <div className="flex-shrink-0 border-b border-border px-6 py-3 flex items-center justify-between bg-card">
         <div>
           <h1 className="text-[15px] font-semibold text-foreground">Diagnostics</h1>
           <p className="text-[11px] text-muted-foreground mt-0.5">
-            Live pipeline event log — scraper lifecycle tracking
+            Store-first risk queue with supporting scraper evidence underneath
           </p>
         </div>
         <Button
@@ -110,31 +203,29 @@ export default function Diagnostics() {
 
       <div className="flex-1 overflow-auto">
         <div className="p-6 space-y-6">
-
-          {/* Empty state */}
           {isEmpty && (
             <div className="bg-card rounded-2xl border border-dashed border-border p-10 text-center">
               <Activity className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-              <p className="text-[13px] font-semibold text-foreground mb-1">No events recorded yet</p>
-              <p className="text-[12px] text-muted-foreground">Run a scrape to generate diagnostic data. Events will appear here as the pipeline executes.</p>
+              <p className="text-[13px] font-semibold text-foreground mb-1">No diagnostics recorded yet</p>
+              <p className="text-[12px] text-muted-foreground">Run a scrape to generate store risk signals and event evidence.</p>
             </div>
           )}
 
-          {/* KPI row */}
           {!isEmpty && (
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
               {[
-                { label: 'Total Events',   value: summary?.totalEvents ?? 0,   icon: Activity,       color: 'text-foreground' },
-                { label: 'Critical Errors', value: summary?.criticalErrors ?? 0, icon: XCircle,        color: 'text-destructive' },
-                { label: 'Warnings',        value: summary?.warnings ?? 0,        icon: AlertTriangle,  color: 'text-warning' },
-                { label: 'Failed Stages',   value: summary?.failedStages ?? 0,    icon: BarChart3,      color: 'text-primary' },
+                { label: 'Urgent Stores', value: riskCounts.urgent, icon: XCircle, color: 'text-destructive' },
+                { label: 'At-Risk Stores', value: riskCounts.warning, icon: AlertTriangle, color: 'text-warning' },
+                { label: 'Healthy Stores', value: riskCounts.healthy, icon: CheckCircle2, color: 'text-success' },
+                { label: 'Critical Errors', value: summary?.criticalErrors ?? 0, icon: ShieldAlert, color: 'text-destructive' },
+                { label: 'Warnings', value: summary?.warnings ?? 0, icon: BarChart3, color: 'text-warning' },
               ].map(({ label, value, icon: Icon, color }) => (
                 <div key={label} className="bg-card rounded-2xl border border-border p-4 shadow-card">
                   <div className="flex items-center gap-2 mb-2">
                     <Icon className={cn('w-4 h-4', color)} />
                     <p className="text-[11px] text-muted-foreground">{label}</p>
                   </div>
-                  {summaryLoading ? (
+                  {summaryLoading || diagnosticsLoading ? (
                     <Skeleton className="h-7 w-16" />
                   ) : (
                     <p className={cn('text-2xl font-bold tabular-nums', color)}>{value.toLocaleString()}</p>
@@ -144,7 +235,6 @@ export default function Diagnostics() {
             </div>
           )}
 
-          {/* AI summary result */}
           {runSummaryAnalysis && (
             <div className="bg-card rounded-2xl border border-primary/30 p-5 shadow-card">
               <div className="flex items-center gap-2 mb-3">
@@ -154,65 +244,157 @@ export default function Diagnostics() {
               {runSummaryAnalysis.summary && (
                 <p className="text-[13px] text-foreground mb-3">{runSummaryAnalysis.summary}</p>
               )}
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                {runSummaryAnalysis.performing_well?.length > 0 && (
-                  <div className="bg-success/10 rounded-xl px-3 py-2">
-                    <p className="text-[10px] font-semibold text-success mb-1">Performing Well</p>
-                    {(runSummaryAnalysis.performing_well as string[]).map((s: string) => (
-                      <p key={s} className="text-[11px] text-foreground">• {s}</p>
-                    ))}
-                  </div>
-                )}
-                {runSummaryAnalysis.failing_badly?.length > 0 && (
-                  <div className="bg-destructive/10 rounded-xl px-3 py-2">
-                    <p className="text-[10px] font-semibold text-destructive mb-1">Failing Badly</p>
-                    {(runSummaryAnalysis.failing_badly as string[]).map((s: string) => (
-                      <p key={s} className="text-[11px] text-foreground">• {s}</p>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {runSummaryAnalysis.top_recommendations?.length > 0 && (
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-semibold text-muted-foreground">Top Recommendations</p>
-                  {(runSummaryAnalysis.top_recommendations as any[]).map((r: any, i: number) => (
-                    <div key={i} className="flex items-start gap-2">
-                      <Badge variant="outline" className={cn('text-[9px] shrink-0 mt-0.5',
-                        r.priority === 'high' ? 'text-destructive border-destructive/40' :
-                        r.priority === 'medium' ? 'text-warning border-warning/40' : ''
-                      )}>
-                        {r.priority}
-                      </Badge>
-                      <div>
-                        <p className="text-[12px] font-medium text-foreground">{r.action}</p>
-                        <p className="text-[10px] text-muted-foreground">{r.reason}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
           )}
 
-          {/* Event log table */}
           {!isEmpty && (
             <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
-              {/* Filter bar */}
-              <div className="flex items-center gap-3 p-4 border-b border-border flex-wrap">
-                <div className="relative flex-1 min-w-[180px]">
+              <div className="p-4 border-b border-border flex items-center gap-3 flex-wrap">
+                <div className="relative flex-1 min-w-[220px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
                     value={search}
                     onChange={e => { setSearch(e.target.value); setPage(1); }}
-                    placeholder="Search messages, URLs, stages…"
+                    placeholder="Search store name, URL, reason, issue…"
                     className="pl-9 h-8 text-[12px]"
                   />
                 </div>
 
-                {/* Severity */}
+                <Select value={riskFilter} onValueChange={setRiskFilter}>
+                  <SelectTrigger className="h-8 text-[11px] w-40">
+                    <Filter className="w-3 h-3 mr-1" />
+                    <SelectValue placeholder="Risk" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All risk states</SelectItem>
+                    <SelectItem value="blocked">Blocked</SelectItem>
+                    <SelectItem value="failing">Failing</SelectItem>
+                    <SelectItem value="auth_required">Auth required</SelectItem>
+                    <SelectItem value="zero_products">Zero products</SelectItem>
+                    <SelectItem value="stale">Stale</SelectItem>
+                    <SelectItem value="never_scraped">Never scraped</SelectItem>
+                    <SelectItem value="productive">Productive</SelectItem>
+                    <SelectItem value="disabled">Disabled</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <Select value={sortBy} onValueChange={v => setSortBy(v as any)}>
+                  <SelectTrigger className="h-8 text-[11px] w-36">
+                    <ArrowUpDown className="w-3 h-3 mr-1" />
+                    <SelectValue placeholder="Sort" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="risk">Sort by risk</SelectItem>
+                    <SelectItem value="errors">Sort by errors</SelectItem>
+                    <SelectItem value="products">Sort by low products</SelectItem>
+                    <SelectItem value="name">Sort by name</SelectItem>
+                  </SelectContent>
+                </Select>
+
+                <p className="text-[11px] text-muted-foreground ml-auto">{storeRows.length.toLocaleString()} stores</p>
+              </div>
+
+              <div className="overflow-auto">
+                <table className="w-full text-[12px]">
+                  <thead>
+                    <tr className="border-b border-border bg-muted/30">
+                      {['Risk', 'Store', 'Reason', 'Products', 'Errors 7d', 'Warnings 7d', 'Latest Run', 'Last Scraped', 'Actions'].map(h => (
+                        <th key={h} className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">
+                          {h}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(storesLoading || diagnosticsLoading) && Array.from({ length: 8 }).map((_, i) => (
+                      <tr key={i} className="border-b border-border/50">
+                        {Array.from({ length: 9 }).map((_, j) => (
+                          <td key={j} className="px-4 py-3"><Skeleton className="h-3 w-full" /></td>
+                        ))}
+                      </tr>
+                    ))}
+
+                    {!storesLoading && !diagnosticsLoading && storeRows.length === 0 && (
+                      <tr>
+                        <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground text-[12px]">
+                          No stores match the current risk filters.
+                        </td>
+                      </tr>
+                    )}
+
+                    {storeRows.map(row => (
+                      <tr key={row.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors align-top">
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={cn('inline-flex items-center gap-1.5 px-2 py-1 rounded-full text-[11px] font-medium border', riskTone(row.status))}>
+                            <RiskIcon status={row.status} />
+                            {row.label}
+                          </span>
+                          <div className="text-[10px] text-muted-foreground mt-1">Score {row.risk}</div>
+                        </td>
+                        <td className="px-4 py-3 min-w-[220px]">
+                          <div className="flex items-center gap-2">
+                            <StoreIcon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                            <div className="min-w-0">
+                              <p className="font-medium text-foreground truncate">{row.name}</p>
+                              <p className="text-[10px] text-muted-foreground truncate">{row.normalized_url}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-3 min-w-[280px]">
+                          <p className="text-[11px] text-foreground">{row.reason}</p>
+                          {row.latestErrorMessage && (
+                            <p className="text-[10px] text-destructive mt-1 line-clamp-2">{row.latestErrorMessage}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap font-semibold tabular-nums">{(row.total_products ?? 0).toLocaleString()}</td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={cn('font-semibold tabular-nums', row.failuresLast7Days > 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                            {row.failuresLast7Days}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <span className={cn('font-semibold tabular-nums', row.warningsLast7Days > 0 ? 'text-warning' : 'text-muted-foreground')}>
+                            {row.warningsLast7Days}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[11px]">
+                          <div className="text-foreground">{row.latestRunStatus ?? '—'}</div>
+                          <div className="text-[10px] text-muted-foreground">{row.latestRunAt ? new Date(row.latestRunAt).toLocaleString() : 'No run yet'}</div>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[11px] text-muted-foreground">
+                          {row.last_scraped_at ? new Date(row.last_scraped_at).toLocaleString() : 'Never'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <div className="flex items-center gap-2">
+                            <Button asChild variant="outline" size="sm" className="h-7 text-[11px]">
+                              <Link to={`/stores/${row.id}`}>Open</Link>
+                            </Button>
+                            <a href={row.url} target="_blank" rel="noreferrer" className="text-muted-foreground hover:text-foreground">
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </a>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {!isEmpty && (
+            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+              <div className="flex items-center justify-between p-4 border-b border-border">
+                <div>
+                  <h2 className="text-[13px] font-semibold text-foreground">Event Evidence</h2>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Raw scraper events supporting the store risk view</p>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{totalCount.toLocaleString()} events</p>
+              </div>
+
+              <div className="flex items-center gap-3 p-4 border-b border-border flex-wrap">
                 <Select value={filterSeverity} onValueChange={v => { setFilterSeverity(v); setPage(1); }}>
                   <SelectTrigger className="h-8 text-[11px] w-32">
-                    <Filter className="w-3 h-3 mr-1" />
                     <SelectValue placeholder="Severity" />
                   </SelectTrigger>
                   <SelectContent>
@@ -224,7 +406,6 @@ export default function Diagnostics() {
                   </SelectContent>
                 </Select>
 
-                {/* Stage */}
                 <Select value={filterStage} onValueChange={v => { setFilterStage(v); setPage(1); }}>
                   <SelectTrigger className="h-8 text-[11px] w-44">
                     <SelectValue placeholder="Stage" />
@@ -237,9 +418,8 @@ export default function Diagnostics() {
                   </SelectContent>
                 </Select>
 
-                {/* Store */}
                 <Select value={filterStore} onValueChange={v => { setFilterStore(v); setPage(1); }}>
-                  <SelectTrigger className="h-8 text-[11px] w-40">
+                  <SelectTrigger className="h-8 text-[11px] w-44">
                     <SelectValue placeholder="Store" />
                   </SelectTrigger>
                   <SelectContent>
@@ -250,7 +430,6 @@ export default function Diagnostics() {
                   </SelectContent>
                 </Select>
 
-                {/* Date range */}
                 <Select value={filterDate} onValueChange={v => { setFilterDate(v as any); setPage(1); }}>
                   <SelectTrigger className="h-8 text-[11px] w-32">
                     <SelectValue placeholder="Date range" />
@@ -262,39 +441,26 @@ export default function Diagnostics() {
                     <SelectItem value="30d">Last 30 days</SelectItem>
                   </SelectContent>
                 </Select>
-
-                <p className="text-[11px] text-muted-foreground ml-auto shrink-0">
-                  {totalCount.toLocaleString()} events
-                </p>
               </div>
 
-              {/* Table */}
               <div className="overflow-auto">
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
                       {['Timestamp', 'Store', 'Stage', 'Severity', 'URL', 'Message'].map(h => (
-                        <th key={h} className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">
-                          {h}
-                        </th>
+                        <th key={h} className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
-                    {eventsLoading && Array.from({ length: 8 }).map((_, i) => (
+                    {eventsLoading && Array.from({ length: 6 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        {Array.from({ length: 6 }).map((_, j) => (
-                          <td key={j} className="px-4 py-3">
-                            <Skeleton className="h-3 w-full" />
-                          </td>
-                        ))}
+                        {Array.from({ length: 6 }).map((_, j) => <td key={j} className="px-4 py-3"><Skeleton className="h-3 w-full" /></td>)}
                       </tr>
                     ))}
                     {!eventsLoading && events.length === 0 && (
                       <tr>
-                        <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground text-[12px]">
-                          No events match the current filters.
-                        </td>
+                        <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground text-[12px]">No events match the current filters.</td>
                       </tr>
                     )}
                     {events.map(evt => (
@@ -305,39 +471,22 @@ export default function Diagnostics() {
                             <span className="text-[10px]">{new Date(evt.created_at).toLocaleString()}</span>
                           </div>
                         </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <span className="font-medium text-foreground text-[11px]">
-                            {evt.store_id ? (storeNameMap[evt.store_id] ?? evt.store_id.slice(0, 8) + '…') : '—'}
-                          </span>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-[11px] font-medium text-foreground">
+                          {evt.store_id ? ((stores ?? []).find(s => s.id === evt.store_id)?.name ?? `${evt.store_id.slice(0, 8)}…`) : '—'}
                         </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <span className="text-[11px] text-foreground">{stageLabel(evt.stage)}</span>
-                        </td>
-                        <td className="px-4 py-2.5 whitespace-nowrap">
-                          <SeverityBadge severity={evt.severity} />
-                        </td>
+                        <td className="px-4 py-2.5 whitespace-nowrap text-[11px] text-foreground">{stageLabel(evt.stage)}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap"><SeverityBadge severity={evt.severity} /></td>
                         <td className="px-4 py-2.5 max-w-[200px]">
                           {evt.url ? (
-                            <a
-                              href={evt.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="truncate text-[10px] text-primary hover:underline flex items-center gap-1"
-                              title={evt.url}
-                              onClick={e => e.stopPropagation()}
-                            >
+                            <a href={evt.url} target="_blank" rel="noopener noreferrer" className="truncate text-[10px] text-primary hover:underline flex items-center gap-1" title={evt.url}>
                               <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
                               <span className="truncate">{evt.url.replace(/^https?:\/\//, '').slice(0, 40)}{evt.url.length > 40 ? '…' : ''}</span>
                             </a>
-                          ) : (
-                            <span className="text-muted-foreground text-[10px]">—</span>
-                          )}
+                          ) : <span className="text-muted-foreground text-[10px]">—</span>}
                         </td>
                         <td className="px-4 py-2.5 max-w-[320px]">
                           <p className="truncate text-[11px] text-foreground" title={evt.message}>{evt.message || '—'}</p>
-                          {evt.raw_error && (
-                            <p className="truncate text-[10px] text-destructive mt-0.5" title={evt.raw_error}>{evt.raw_error.slice(0, 80)}</p>
-                          )}
+                          {evt.raw_error && <p className="truncate text-[10px] text-destructive mt-0.5" title={evt.raw_error}>{evt.raw_error.slice(0, 80)}</p>}
                         </td>
                       </tr>
                     ))}
@@ -345,21 +494,15 @@ export default function Diagnostics() {
                 </table>
               </div>
 
-              {/* Pagination */}
               {totalPages > 1 && (
                 <div className="flex items-center justify-between px-4 py-3 border-t border-border">
-                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>
-                    Previous
-                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>Previous</Button>
                   <p className="text-[11px] text-muted-foreground">Page {page} of {totalPages}</p>
-                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}>
-                    Next
-                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-[11px]" onClick={() => setPage(p => p + 1)} disabled={page >= totalPages}>Next</Button>
                 </div>
               )}
             </div>
           )}
-
         </div>
       </div>
     </div>
