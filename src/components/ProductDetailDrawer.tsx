@@ -210,10 +210,18 @@ export function ProductDetailDrawer({ product, open, onClose }: ProductDetailDra
 
   if (!product) return null;
 
-  const variants: any[] = product.product_variants ?? [];
+  const variants: any[] = Array.isArray(product.product_variants) ? product.product_variants : [];
+  const categoryPath = Array.isArray(product.category_path) ? product.category_path : [];
+  const tags = Array.isArray(product.tags)
+    ? product.tags
+    : typeof product.tags === 'string'
+      ? product.tags.split(',').map((t: string) => t.trim()).filter(Boolean)
+      : [];
+  const missingFields = Array.isArray(product.missing_fields) ? product.missing_fields : [];
+  const imageUrls = Array.isArray(product.image_urls) ? product.image_urls : [];
   const images: string[] = [
     ...(product.image_url ? [product.image_url] : []),
-    ...(product.image_urls ?? []).filter((u: string) => u !== product.image_url),
+    ...imageUrls.filter((u: string) => u !== product.image_url),
   ];
 
   const copyJson = (obj: unknown) => {
@@ -286,10 +294,10 @@ export function ProductDetailDrawer({ product, open, onClose }: ProductDetailDra
                   </div>
                 ))}
               </div>
-              {(product.missing_fields ?? []).length > 0 && (
+              {missingFields.length > 0 && (
                 <div className="rounded-lg bg-warning/10 border border-warning/20 p-3">
                   <p className="text-[10px] font-semibold text-warning mb-1">Missing fields</p>
-                  <p className="text-xs text-warning">{(product.missing_fields ?? []).join(', ')}</p>
+                  <p className="text-xs text-warning">{missingFields.join(', ')}</p>
                 </div>
               )}
             </TabsContent>
@@ -319,8 +327,8 @@ export function ProductDetailDrawer({ product, open, onClose }: ProductDetailDra
               <FieldRow label="Title" value={product.title} fieldKey="title" productId={product.id} overrides={overrides} />
               <FieldRow label="Brand / Vendor" value={product.brand} fieldKey="brand" productId={product.id} overrides={overrides} />
               <FieldRow label="Category" value={product.category} fieldKey="category" productId={product.id} overrides={overrides} />
-              <FieldRow label="Category Path" value={(product.category_path ?? []).join(' > ')} fieldKey="category_path" productId={product.id} overrides={overrides} />
-              <FieldRow label="Tags" value={(product.tags ?? []).join('; ')} fieldKey="tags" productId={product.id} overrides={overrides} />
+              <FieldRow label="Category Path" value={categoryPath.join(' > ')} fieldKey="category_path" productId={product.id} overrides={overrides} />
+              <FieldRow label="Tags" value={tags.join('; ')} fieldKey="tags" productId={product.id} overrides={overrides} />
               <FieldRow label="Size" value={product.size_text} fieldKey="size_text" productId={product.id} overrides={overrides} />
 
               <SectionHeader title="Pricing" />
@@ -360,7 +368,7 @@ export function ProductDetailDrawer({ product, open, onClose }: ProductDetailDra
               </div>
               <div className="flex items-start gap-2 py-2 border-b border-border/40">
                 <span className="text-[11px] text-muted-foreground w-32 flex-shrink-0">Missing fields</span>
-                <span className="text-xs text-warning">{(product.missing_fields ?? []).join(', ') || 'none'}</span>
+                <span className="text-xs text-warning">{missingFields.join(', ') || 'none'}</span>
               </div>
               <div className="flex items-start gap-2 py-2 border-b border-border/40">
                 <span className="text-[11px] text-muted-foreground w-32 flex-shrink-0">Review status</span>

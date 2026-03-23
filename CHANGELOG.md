@@ -22,6 +22,28 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 1f products page scroll + drawer hardening
+
+### Delivered
+- Fixed Products page scrolling by making the page itself a vertical scroll container inside the app shell
+- Added a lightweight results summary above the table so the page reads more like a browse-and-inspect workspace
+- Hardened `ProductDetailDrawer` against inconsistent data shapes from live product rows:
+  - `category_path` may be null/non-array
+  - `tags` may be null/string/non-array
+  - `missing_fields` may be null/non-array
+  - `image_urls` may be null/non-array
+  - `product_variants` may be null/non-array
+- This prevents row-click crashes caused by calling array methods on non-array values
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Product detail is still a drawer, not a dedicated routed product page yet
+- The drawer is now more robust, but the underlying products schema still has mixed historical field shapes
+- Further polish is still possible around column resizing, sticky headers, and richer product detail actions
+
 ## 2026-03-24 — Phase 1e diagnostics drill-down + cleaner search + success delta
 
 ### Delivered

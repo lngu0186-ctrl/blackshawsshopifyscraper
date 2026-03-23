@@ -154,7 +154,8 @@ export default function Products() {
   const colCount = visibleColsArr.length + 1; // +1 for checkbox
 
   return (
-    <div className="p-6 space-y-4 max-w-full">
+    <div className="h-full overflow-y-auto">
+      <div className="p-6 space-y-4 max-w-full">
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -350,8 +351,18 @@ export default function Products() {
         </div>
       )}
 
+      {/* Results summary */}
+      <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
+        <span>
+          Showing {products.length.toLocaleString()} of {total.toLocaleString()} products
+        </span>
+        <span>
+          Click any row to inspect product details, diagnostics, variants, and raw scrape data.
+        </span>
+      </div>
+
       {/* Table */}
-      <div className="rounded-lg border border-border overflow-hidden">
+      <div className="rounded-lg border border-border overflow-hidden bg-card">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -433,6 +444,7 @@ export default function Products() {
         open={!!drawerProduct}
         onClose={() => setDrawerProduct(null)}
       />
+      </div>
     </div>
   );
 }
