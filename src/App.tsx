@@ -12,6 +12,7 @@ import Export from "./pages/Export";
 import Diagnostics from "./pages/Diagnostics";
 import SettingsPage from "./pages/Settings";
 import StoreDetail from "./pages/StoreDetail";
+import Stores from "./pages/Stores";
 import ScrapingAudit from "./pages/ScrapingAudit";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
