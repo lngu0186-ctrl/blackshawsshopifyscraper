@@ -419,13 +419,13 @@ export default function Dashboard() {
             <Link to="/products" className="block">
               <KpiCard icon={Zap}           label="Enriched"          value={pipeline?.enriched ?? 0}            sub="detail fetched"                             color="text-success"     loading={pipelineLoading} />
             </Link>
-            <Link to="/products?scrape_status=failed" className="block">
+            <Link to="/diagnostics?severity=error&date=7d" className="block">
               <KpiCard icon={XCircle}       label="Failed"            value={pipeline?.failed ?? 0}              sub="scrape failed"                              color="text-destructive" loading={pipelineLoading} />
             </Link>
             <Link to="/products?review_status=pending" className="block">
               <KpiCard icon={AlertTriangle} label="Review Required"   value={reviewCount}                        sub="60–89 confidence"                           color="text-warning"     loading={pipelineLoading} />
             </Link>
-            <Link to="/products?auth_blocked=1" className="block">
+            <Link to="/diagnostics?risk=auth_required&date=7d" className="block">
               <KpiCard icon={Store}         label="Auth Blocked"      value={pipeline?.authBlocked ?? 0}         sub="login required"                             color="text-warning"     loading={pipelineLoading} />
             </Link>
             <Link to="/export" className="block">

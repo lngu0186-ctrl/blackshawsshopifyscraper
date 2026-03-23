@@ -1,5 +1,5 @@
-import { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useStores } from '@/hooks/useStores';
 import { useAnalyzeFailure } from '@/hooks/useDiagnostics';
 import { useScraperEvents, useScraperEventsSummary, useScraperEventStages } from '@/hooks/useScraperEvents';
@@ -88,7 +88,9 @@ function riskScore(row: any) {
 }
 
 export default function Diagnostics() {
-  const [search, setSearch] = useState('');
+  const [searchParams] = useSearchParams();
+  const [storeSearch, setStoreSearch] = useState('');
+  const [eventSearch, setEventSearch] = useState('');
   const [filterSeverity, setFilterSeverity] = useState('all');
   const [filterStage, setFilterStage] = useState('all');
   const [filterStore, setFilterStore] = useState('all');
@@ -100,6 +102,19 @@ export default function Diagnostics() {
 
   const analyzeFailure = useAnalyzeFailure();
   const { data: stores, isLoading: storesLoading } = useStores();
+
+  useEffect(() => {
+    const risk = searchParams.get('risk');
+    const severity = searchParams.get('severity');
+    const stage = searchParams.get('stage');
+    const storeId = searchParams.get('store');
+    const date = searchParams.get('date');
+    if (risk) setRiskFilter(risk);
+    if (severity) setFilterSeverity(severity);
+    if (stage) setFilterStage(stage);
+    if (storeId) setFilterStore(storeId);
+    if (date && ['24h', '7d', '30d', 'all'].includes(date)) setFilterDate(date as any);
+  }, [searchParams]);
   const { data: diagnostics, isLoading: diagnosticsLoading } = useStoreDiagnostics(stores);
   const { data: summary, isLoading: summaryLoading } = useScraperEventsSummary();
   const { data: stages } = useScraperEventStages();
@@ -109,7 +124,7 @@ export default function Diagnostics() {
     stage: filterStage !== 'all' ? filterStage : undefined,
     store_id: filterStore !== 'all' ? filterStore : undefined,
     dateRange: filterDate,
-    search: search || undefined,
+    search: eventSearch || undefined,
     page,
     pageSize: 50,
   });
@@ -132,11 +147,13 @@ export default function Diagnostics() {
         latestRunStatus: d?.latestRunStatus ?? null,
         latestRunAt: d?.latestRunAt ?? null,
         latestErrorMessage: d?.latestErrorMessage ?? null,
+        lastSuccessfulRunAt: d?.lastSuccessfulRunAt ?? null,
+        failuresSinceSuccess: d?.failuresSinceSuccess ?? 0,
         risk: riskScore({ ...store, ...d }),
       };
     });
 
-    const searchLower = search.trim().toLowerCase();
+    const searchLower = storeSearch.trim().toLowerCase();
     const filtered = rows.filter(row => {
       if (riskFilter !== 'all' && row.status !== riskFilter) return false;
       if (!searchLower) return true;
@@ -153,7 +170,7 @@ export default function Diagnostics() {
     });
 
     return sorted;
-  }, [stores, diagnostics, riskFilter, sortBy, search]);
+  }, [stores, diagnostics, riskFilter, sortBy, storeSearch]);
 
   const riskCounts = useMemo(() => {
     const rows = Object.values(diagnostics ?? {});
@@ -253,8 +270,8 @@ export default function Diagnostics() {
                 <div className="relative flex-1 min-w-[220px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
-                    value={search}
-                    onChange={e => { setSearch(e.target.value); setPage(1); }}
+                    value={storeSearch}
+                    onChange={e => setStoreSearch(e.target.value)}
                     placeholder="Search store name, URL, reason, issue…"
                     className="pl-9 h-8 text-[12px]"
                   />
@@ -298,7 +315,7 @@ export default function Diagnostics() {
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
-                      {['Risk', 'Store', 'Reason', 'Products', 'Errors 7d', 'Warnings 7d', 'Latest Run', 'Last Scraped', 'Actions'].map(h => (
+                      {['Risk', 'Store', 'Reason', 'Products', 'Errors 7d', 'Warnings 7d', 'Latest Run', 'Last Success', 'Failure Delta', 'Last Scraped', 'Actions'].map(h => (
                         <th key={h} className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">
                           {h}
                         </th>
@@ -308,7 +325,7 @@ export default function Diagnostics() {
                   <tbody>
                     {(storesLoading || diagnosticsLoading) && Array.from({ length: 8 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        {Array.from({ length: 9 }).map((_, j) => (
+                        {Array.from({ length: 11 }).map((_, j) => (
                           <td key={j} className="px-4 py-3"><Skeleton className="h-3 w-full" /></td>
                         ))}
                       </tr>
@@ -316,7 +333,7 @@ export default function Diagnostics() {
 
                     {!storesLoading && !diagnosticsLoading && storeRows.length === 0 && (
                       <tr>
-                        <td colSpan={9} className="px-4 py-12 text-center text-muted-foreground text-[12px]">
+                        <td colSpan={11} className="px-4 py-12 text-center text-muted-foreground text-[12px]">
                           No stores match the current risk filters.
                         </td>
                       </tr>
@@ -362,6 +379,14 @@ export default function Diagnostics() {
                           <div className="text-[10px] text-muted-foreground">{row.latestRunAt ? new Date(row.latestRunAt).toLocaleString() : 'No run yet'}</div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-[11px] text-muted-foreground">
+                          {row.lastSuccessfulRunAt ? new Date(row.lastSuccessfulRunAt).toLocaleString() : 'No success yet'}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[11px]">
+                          <span className={cn('font-semibold tabular-nums', row.failuresSinceSuccess > 0 ? 'text-destructive' : 'text-success')}>
+                            {row.failuresSinceSuccess > 0 ? `+${row.failuresSinceSuccess} failures` : 'Clean since success'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[11px] text-muted-foreground">
                           {row.last_scraped_at ? new Date(row.last_scraped_at).toLocaleString() : 'Never'}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
@@ -393,6 +418,15 @@ export default function Diagnostics() {
               </div>
 
               <div className="flex items-center gap-3 p-4 border-b border-border flex-wrap">
+                <div className="relative flex-1 min-w-[220px]">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                  <Input
+                    value={eventSearch}
+                    onChange={e => { setEventSearch(e.target.value); setPage(1); }}
+                    placeholder="Search event messages, URLs, stages…"
+                    className="pl-9 h-8 text-[12px]"
+                  />
+                </div>
                 <Select value={filterSeverity} onValueChange={v => { setFilterSeverity(v); setPage(1); }}>
                   <SelectTrigger className="h-8 text-[11px] w-32">
                     <SelectValue placeholder="Severity" />

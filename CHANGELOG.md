@@ -22,6 +22,28 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 1e diagnostics drill-down + cleaner search + success delta
+
+### Delivered
+- Split diagnostics search into two separate inputs:
+  - **store search** for the risk queue
+  - **event evidence search** for raw scraper events
+- Added dashboard → diagnostics drill-down links so key KPI cards can open diagnostics with pre-applied filters:
+  - failed → severity error
+  - auth blocked → auth-required risk view
+- Added **last successful scrape** to each store row on the diagnostics risk table
+- Added **failure delta** (`failures since last success`) to help spot regressions after a previously good run
+- Added diagnostics URL parameter handling so risk/severity/stage/store/date filters can be deep-linked cleanly
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Failure delta is based on `scrape_run_stores` history and current row availability, not a dedicated backend regression model
+- Dashboard drill-downs currently cover the main failure/auth cases, but not every KPI card yet
+- Search/filter state is URL-seeded but not fully mirrored back into the URL after every local UI change
+
 ## 2026-03-24 — Phase 1d diagnostics page becomes store-first risk queue
 
 ### Delivered

@@ -24,6 +24,8 @@ export interface StoreDiagnosticSummary {
   warningsLast7Days: number;
   latestRunStatus: string | null;
   latestRunAt: string | null;
+  lastSuccessfulRunAt: string | null;
+  failuresSinceSuccess: number;
   latestErrorMessage: string | null;
   lastEventAt: string | null;
   products: number;
@@ -99,7 +101,7 @@ export function useStoreDiagnostics(stores?: Store[]) {
           .eq('user_id', user!.id)
           .in('store_id', storeIds)
           .order('updated_at', { ascending: false })
-          .limit(500),
+          .limit(2000),
         supabase
           .from('scraper_events')
           .select('store_id,severity,message,created_at,reason_code')
@@ -114,9 +116,28 @@ export function useStoreDiagnostics(stores?: Store[]) {
       if (eventsRes.error) throw eventsRes.error;
 
       const latestRunByStore = new Map<string, any>();
+      const lastSuccessfulRunByStore = new Map<string, any>();
+      const failuresSinceSuccessByStore = new Map<string, number>();
+
       for (const row of runStoresRes.data ?? []) {
-        if (!row.store_id || latestRunByStore.has(row.store_id)) continue;
-        latestRunByStore.set(row.store_id, row);
+        if (!row.store_id) continue;
+        if (!latestRunByStore.has(row.store_id)) {
+          latestRunByStore.set(row.store_id, row);
+        }
+        if (row.status === 'completed' && !lastSuccessfulRunByStore.has(row.store_id)) {
+          lastSuccessfulRunByStore.set(row.store_id, row);
+        }
+      }
+
+      for (const row of runStoresRes.data ?? []) {
+        if (!row.store_id) continue;
+        const lastSuccess = lastSuccessfulRunByStore.get(row.store_id);
+        const rowTime = row.finished_at ?? row.updated_at ?? row.started_at;
+        const lastSuccessTime = lastSuccess?.finished_at ?? lastSuccess?.updated_at ?? lastSuccess?.started_at;
+        const happenedAfterLastSuccess = !lastSuccessTime || (rowTime && new Date(rowTime).getTime() > new Date(lastSuccessTime).getTime());
+        if (happenedAfterLastSuccess && row.status === 'error') {
+          failuresSinceSuccessByStore.set(row.store_id, (failuresSinceSuccessByStore.get(row.store_id) ?? 0) + 1);
+        }
       }
 
       const eventStats = new Map<string, {
@@ -158,11 +179,14 @@ export function useStoreDiagnostics(stores?: Store[]) {
           lastEventAt: null,
         };
 
+        const lastSuccess = lastSuccessfulRunByStore.get(store.id);
         const base = {
           failuresLast7Days: stats.failures,
           warningsLast7Days: stats.warnings,
           latestRunStatus: latestRun?.status ?? null,
           latestRunAt: latestRun?.finished_at ?? latestRun?.updated_at ?? latestRun?.started_at ?? null,
+          lastSuccessfulRunAt: lastSuccess?.finished_at ?? lastSuccess?.updated_at ?? lastSuccess?.started_at ?? null,
+          failuresSinceSuccess: failuresSinceSuccessByStore.get(store.id) ?? 0,
           latestErrorMessage: latestRun?.message ?? stats.latestErrorMessage,
           lastEventAt: stats.lastEventAt,
         };
