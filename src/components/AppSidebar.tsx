@@ -33,6 +33,7 @@ const NAV_SECTIONS = [
     label: 'Overview',
     items: [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
+      { to: '/stores', icon: Store, label: 'Stores', end: false },
       { to: '/products', icon: Package, label: 'Products', end: false },
       { to: '/price-changes', icon: Activity, label: 'Price Changes', end: false },
     ],

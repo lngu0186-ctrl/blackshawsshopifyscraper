@@ -651,7 +651,7 @@ export default function Dashboard() {
                   {(stores?.length ?? 0) > 8 && (
                     <div className="px-4 py-2 text-center">
                       <Button variant="ghost" size="sm" className="h-6 text-[11px] text-muted-foreground" asChild>
-                        <Link to="/products">View all stores →</Link>
+                        <Link to="/stores">View all stores →</Link>
                       </Button>
                     </div>
                   )}
