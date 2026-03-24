@@ -35,15 +35,15 @@ async function scrapeShopify(baseUrl: string): Promise<any[]> {
   let page = 1;
   let cursor: string | null = null;
   while (true) {
-    const url = cursor ? `${baseUrl}/products.json?limit=250&page_info=${cursor}` : `${baseUrl}/products.json?limit=250&page=${page}`;
-    const res = await fetch(url, { headers: SCRAPE_HEADERS });
+    const reqUrl: string = cursor ? `${baseUrl}/products.json?limit=250&page_info=${cursor}` : `${baseUrl}/products.json?limit=250&page=${page}`;
+    const res: Response = await fetch(reqUrl, { headers: SCRAPE_HEADERS });
     if (!res.ok) break;
     const json = await res.json();
     const batch: any[] = json.products ?? [];
     if (batch.length === 0) break;
     products.push(...batch);
-    const linkHeader = res.headers.get('link') ?? '';
-    const nextMatch = linkHeader.match(/<[^>]+page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
+    const linkHeader: string = res.headers.get('link') ?? '';
+    const nextMatch: RegExpMatchArray | null = linkHeader.match(/<[^>]+page_info=([^>&"]+)[^>]*>;\s*rel="next"/);
     if (nextMatch) { cursor = nextMatch[1]; }
     else if (batch.length < 250) { break; }
     else { page++; cursor = null; }
