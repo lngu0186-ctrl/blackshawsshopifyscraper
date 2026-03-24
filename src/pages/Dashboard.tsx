@@ -566,22 +566,22 @@ export default function Dashboard() {
             <div className="xl:col-span-1 space-y-4">
 
               {/* Live Activity Feed */}
-              <div className="bg-card rounded-2xl border border-border shadow-card flex flex-col" style={{ maxHeight: '420px' }}>
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+              <div className="bg-white rounded-2xl border border-border shadow-card flex flex-col" style={{ maxHeight: '420px' }}>
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
                   <div>
-                    <h2 className="text-[13px] font-bold text-foreground">Live Activity</h2>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Real-time scraper events</p>
+                    <h2 className="text-[13.5px] font-bold text-foreground">Live Activity</h2>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">Real-time scraper events</p>
                   </div>
                   {isRunning && (
-                    <span className="flex items-center gap-1.5 text-[10px] text-warning font-semibold">
+                    <span className="flex items-center gap-1.5 text-[10px] text-warning font-semibold px-2 py-0.5 rounded-full bg-warning/10">
                       <span className="w-1.5 h-1.5 rounded-full bg-warning animate-pulse" />
                       Live
                     </span>
                   )}
                 </div>
-                <div className="flex-1 overflow-y-auto px-4 divide-y divide-border/50">
+                <div className="flex-1 overflow-y-auto px-4 divide-y divide-border/40">
                   {logs.length === 0 && (
-                    <p className="text-[11px] text-muted-foreground text-center py-8">No activity yet. Start a scrape to see live events.</p>
+                    <p className="text-[12px] text-muted-foreground text-center py-10">No activity yet. Start a scrape to see live events.</p>
                   )}
                   {logs.slice(-50).map((log, i) => (
                     <ActivityRow key={`${log.id ?? i}`} log={log} />
@@ -592,9 +592,9 @@ export default function Dashboard() {
 
               {/* Scrape Run: Per-Store Status */}
               {Object.keys(storeStatuses).length > 0 && (
-                <div className="bg-card rounded-2xl border border-border shadow-card">
-                  <div className="px-4 py-3 border-b border-border">
-                    <h2 className="text-[13px] font-bold text-foreground">Store Progress</h2>
+                <div className="bg-white rounded-2xl border border-border shadow-card">
+                  <div className="px-5 py-4 border-b border-border">
+                    <h2 className="text-[13.5px] font-bold text-foreground">Store Progress</h2>
                   </div>
                   <div className="p-3 space-y-2">
                     {Object.values(storeStatuses).map((s: any) => {
