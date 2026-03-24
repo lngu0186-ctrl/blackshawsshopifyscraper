@@ -22,6 +22,25 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4f specialized retry modes
+
+### Delivered
+- Extended store scrape actions to support per-run settings overrides for targeted retry modes
+- Added **Retry in smaller batch** action for timeout-fallout stores
+  - runs with `maxConcurrentStores: 1`
+- Added **Retry with slow pacing** action for retryable HTTP stores
+  - runs with slower `interPageDelay`
+  - also forces `maxConcurrentStores: 1`
+- Updated existing scrape buttons to use the new action payload shape with clearer mode labels in success toasts
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- These retry modes currently override only client-side run settings passed into `scrape-store`; there is not yet a dedicated backend retry policy profile system
+- “Smaller batch” is effectively single-store/single-concurrency from the current UI, not a richer queued batch planner yet
+- Further gains may still require hosted edge-function deployment so runtime reason codes and pacing behaviors align fully with the latest repo code
+
 ## 2026-03-24 — Phase 4e Store Detail recommended actions + quick actions
 
 ### Delivered

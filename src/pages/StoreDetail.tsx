@@ -142,7 +142,7 @@ export default function StoreDetail() {
         </Button>
         <Button
           size="sm"
-          onClick={() => scrapeStores.mutate([store.id])}
+          onClick={() => scrapeStores.mutate({ storeIds: [store.id], modeLabel: 'Scrape run' })}
           disabled={scrapeStores.isPending}
         >
           Scrape now
@@ -175,10 +175,38 @@ export default function StoreDetail() {
             {(diagnostic.status === 'timeout_fallout' || diagnostic.status === 'retryable_http_error' || diagnostic.status === 'stale' || diagnostic.status === 'zero_products' || diagnostic.status === 'failing') && (
               <Button
                 size="sm"
-                onClick={() => scrapeStores.mutate([store.id])}
+                onClick={() => scrapeStores.mutate({ storeIds: [store.id], modeLabel: 'Focused retry' })}
                 disabled={scrapeStores.isPending}
               >
                 Follow recommendation
+              </Button>
+            )}
+            {diagnostic.status === 'timeout_fallout' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => scrapeStores.mutate({
+                  storeIds: [store.id],
+                  modeLabel: 'Small-batch retry',
+                  overrides: { maxConcurrentStores: 1 },
+                })}
+                disabled={scrapeStores.isPending}
+              >
+                Retry in smaller batch
+              </Button>
+            )}
+            {diagnostic.status === 'retryable_http_error' && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => scrapeStores.mutate({
+                  storeIds: [store.id],
+                  modeLabel: 'Slow-pacing retry',
+                  overrides: { interPageDelay: 2000, maxConcurrentStores: 1 },
+                })}
+                disabled={scrapeStores.isPending}
+              >
+                Retry with slow pacing
               </Button>
             )}
             {diagnostic.status === 'auth_required' && (

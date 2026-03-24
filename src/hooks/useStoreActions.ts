@@ -3,7 +3,7 @@ import { toast } from 'sonner';
 import { supabase } from '@/lib/supabase';
 import { getSettings, scrapeStore } from '@/lib/scrapeClient';
 import { useAuth } from './useAuth';
-import type { Store } from '@/types/schemas';
+import type { Settings, Store } from '@/types/schemas';
 
 async function validateStoreUrl(url: string, accessToken: string) {
   const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string;
@@ -19,8 +19,8 @@ async function validateStoreUrl(url: string, accessToken: string) {
   return res.json();
 }
 
-async function createRunForStores(userId: string, storeIds: string[]) {
-  const settings = getSettings();
+async function createRunForStores(userId: string, storeIds: string[], overrides?: Partial<Settings>) {
+  const settings = { ...getSettings(), ...(overrides || {}) };
   const { data: run, error: runErr } = await supabase
     .from('scrape_runs')
     .insert({
@@ -124,10 +124,10 @@ export function useScrapeStores() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async (storeIds: string[]) => {
+    mutationFn: async ({ storeIds, overrides, modeLabel }: { storeIds: string[]; overrides?: Partial<Settings>; modeLabel?: string }) => {
       if (!user) throw new Error('Not authenticated');
       if (!storeIds.length) throw new Error('No stores selected');
-      const { runId, settings } = await createRunForStores(user.id, storeIds);
+      const { runId, settings } = await createRunForStores(user.id, storeIds, overrides);
       const results: Array<{ storeId: string; ok: boolean }> = [];
       for (const storeId of storeIds) {
         try {
@@ -137,16 +137,16 @@ export function useScrapeStores() {
           results.push({ storeId, ok: false });
         }
       }
-      return { runId, results };
+      return { runId, results, modeLabel };
     },
-    onSuccess: ({ results, runId }) => {
+    onSuccess: ({ results, runId, modeLabel }) => {
       queryClient.invalidateQueries({ queryKey: ['stores'] });
       queryClient.invalidateQueries({ queryKey: ['store_diagnostics'] });
       queryClient.invalidateQueries({ queryKey: ['scrape_runs'] });
       queryClient.invalidateQueries({ queryKey: ['scraper_events'] });
       const ok = results.filter(r => r.ok).length;
       const failed = results.length - ok;
-      toast.success(`Scrape run started (${runId.slice(0, 8)}…) · ${ok} succeeded${failed ? ` · ${failed} failed` : ''}`);
+      toast.success(`${modeLabel || 'Scrape run'} started (${runId.slice(0, 8)}…) · ${ok} succeeded${failed ? ` · ${failed} failed` : ''}`);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to scrape stores'),
   });

@@ -86,7 +86,7 @@ export default function Stores() {
           </Button>
           <Button
             size="sm"
-            onClick={() => scrapeStores.mutate(selectedStores.map(store => store.id))}
+            onClick={() => scrapeStores.mutate({ storeIds: selectedStores.map(store => store.id), modeLabel: 'Bulk scrape' })}
             disabled={!selectedStores.length || scrapeStores.isPending}
           >
             Scrape selected
@@ -174,7 +174,7 @@ export default function Stores() {
                 </Button>
                 <Button
                   size="sm"
-                  onClick={() => scrapeStores.mutate([store.id])}
+                  onClick={() => scrapeStores.mutate({ storeIds: [store.id], modeLabel: 'Store scrape' })}
                   disabled={scrapeStores.isPending}
                 >
                   Scrape now
