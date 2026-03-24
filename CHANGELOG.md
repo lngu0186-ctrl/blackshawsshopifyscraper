@@ -22,6 +22,25 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4h retry history vs previous baseline
+
+### Delivered
+- Upgraded store retry history to compare each attempt against the immediately previous baseline run
+- Added delta signals for:
+  - product count
+  - page count
+  - collection completion improvement heuristics
+- Added **Beat baseline** labeling when a retry improves materially over the previous run (or converts an error baseline into a completed run)
+- This makes retry history more decision-grade instead of just a chronological log
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Baseline comparison currently uses the immediately previous recorded run for the store, not a smarter “best comparable baseline” selector yet
+- Improvement scoring is still heuristic and based on currently available counts/statuses
+- Retry history remains a Store Detail view, not yet summarized into Diagnostics or portfolio-level reporting
+
 ## 2026-03-24 — Phase 4g store-level retry history
 
 ### Delivered

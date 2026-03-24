@@ -27,7 +27,7 @@ export function useStoreRetryHistory(storeId?: string | null) {
 
       if (error) throw error;
 
-      return (data ?? []).map((row: any) => {
+      const rows = (data ?? []).map((row: any) => {
         const run = Array.isArray(row.scrape_runs) ? row.scrape_runs[0] : row.scrape_runs;
         const mode = inferRetryMode(run?.settings);
         return {
@@ -46,7 +46,29 @@ export function useStoreRetryHistory(storeId?: string | null) {
           runStatus: run?.run_status || run?.status || 'unknown',
           retryMode: mode,
           modeLabel: mode === 'slow_pacing' ? 'Slow pacing' : mode === 'smaller_batch' ? 'Smaller batch' : 'Default',
-          helped: row.status === 'completed' && ((row.product_count ?? 0) > 0 || (row.page_count ?? 0) > 0),
+        };
+      });
+
+      return rows.map((entry, index) => {
+        const baseline = rows[index + 1] ?? null;
+        const deltaProducts = baseline ? entry.productCount - baseline.productCount : null;
+        const deltaPages = baseline ? entry.pageCount - baseline.pageCount : null;
+        const deltaCollections = baseline ? entry.collectionsCompleted - baseline.collectionsCompleted : null;
+        const beatBaseline = !!baseline && (
+          deltaProducts! > 0 ||
+          deltaPages! > 0 ||
+          deltaCollections! > 0 ||
+          (baseline.status === 'error' && entry.status === 'completed')
+        );
+
+        return {
+          ...entry,
+          baseline,
+          deltaProducts,
+          deltaPages,
+          deltaCollections,
+          beatBaseline,
+          helped: beatBaseline || (entry.status === 'completed' && (entry.productCount > 0 || entry.pageCount > 0)),
         };
       });
     },

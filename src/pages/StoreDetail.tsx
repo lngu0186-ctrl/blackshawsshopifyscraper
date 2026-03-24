@@ -238,11 +238,21 @@ export default function StoreDetail() {
               <div key={entry.id} className="rounded-xl border border-border bg-muted/20 px-3 py-2 flex items-center gap-3 flex-wrap text-[11px]">
                 <Badge variant="outline" className="text-[10px]">{entry.modeLabel}</Badge>
                 <span className={cn('font-semibold', entry.helped ? 'text-success' : entry.status === 'error' ? 'text-destructive' : 'text-foreground')}>
-                  {entry.helped ? 'Helped' : entry.status === 'completed' ? 'Completed' : entry.status}
+                  {entry.beatBaseline ? 'Beat baseline' : entry.helped ? 'Helped' : entry.status === 'completed' ? 'Completed' : entry.status}
                 </span>
                 <span className="text-muted-foreground">{entry.productCount} products</span>
                 <span className="text-muted-foreground">{entry.pageCount} pages</span>
                 <span className="text-muted-foreground">{entry.collectionsCompleted} collections</span>
+                {entry.deltaProducts !== null && (
+                  <span className={cn('font-medium', entry.deltaProducts > 0 ? 'text-success' : entry.deltaProducts < 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                    Δ products {entry.deltaProducts > 0 ? '+' : ''}{entry.deltaProducts}
+                  </span>
+                )}
+                {entry.deltaPages !== null && (
+                  <span className={cn('font-medium', entry.deltaPages > 0 ? 'text-success' : entry.deltaPages < 0 ? 'text-destructive' : 'text-muted-foreground')}>
+                    Δ pages {entry.deltaPages > 0 ? '+' : ''}{entry.deltaPages}
+                  </span>
+                )}
                 {entry.collectionsFailed > 0 && <span className="text-warning">{entry.collectionsFailed} collection failures</span>}
                 <span className="text-muted-foreground ml-auto">{new Date(entry.updatedAt).toLocaleString()}</span>
               </div>
