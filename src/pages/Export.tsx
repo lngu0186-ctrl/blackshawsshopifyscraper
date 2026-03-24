@@ -34,9 +34,9 @@ function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-card">
+    <div className="bg-white rounded-2xl border border-border shadow-card p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Data Quality</h2>
+        <h2 className="text-[13.5px] font-bold text-foreground">Data Quality</h2>
         {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
       </div>
 
