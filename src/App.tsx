@@ -5,23 +5,24 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/hooks/useAuth";
 import { AppSidebar } from "@/components/AppSidebar";
-import Dashboard from "./pages/Dashboard";
-import Products from "./pages/Products";
-import PriceChanges from "./pages/PriceChanges";
-import Export from "./pages/Export";
-import Diagnostics from "./pages/Diagnostics";
-import SettingsPage from "./pages/Settings";
-import StoreDetail from "./pages/StoreDetail";
-import Stores from "./pages/Stores";
-import ScrapingAudit from "./pages/ScrapingAudit";
-import CanonicalReview from "./pages/CanonicalReview";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import CWImportUploadPage from "./pages/cw-import/index";
-import CWImportListPage from "./pages/cw-import/history";
-import CWImportReviewPage from "./pages/cw-import/[jobId]";
 import { Loader2, AlertTriangle } from "lucide-react";
-import React from "react";
+import React, { Suspense, lazy } from "react";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Products = lazy(() => import("./pages/Products"));
+const PriceChanges = lazy(() => import("./pages/PriceChanges"));
+const Export = lazy(() => import("./pages/Export"));
+const Diagnostics = lazy(() => import("./pages/Diagnostics"));
+const SettingsPage = lazy(() => import("./pages/Settings"));
+const StoreDetail = lazy(() => import("./pages/StoreDetail"));
+const Stores = lazy(() => import("./pages/Stores"));
+const ScrapingAudit = lazy(() => import("./pages/ScrapingAudit"));
+const CanonicalReview = lazy(() => import("./pages/CanonicalReview"));
+const Auth = lazy(() => import("./pages/Auth"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const CWImportUploadPage = lazy(() => import("./pages/cw-import/index"));
+const CWImportListPage = lazy(() => import("./pages/cw-import/history"));
+const CWImportReviewPage = lazy(() => import("./pages/cw-import/[jobId]"));
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
@@ -68,6 +69,14 @@ class ErrorBoundary extends React.Component<
   }
 }
 
+function RouteLoader() {
+  return (
+    <div className="flex-1 bg-background flex items-center justify-center">
+      <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
+
 function AppLayout() {
   const { user, loading } = useAuth();
 
@@ -89,23 +98,25 @@ function AppLayout() {
       {/* Light workspace */}
       <main className="flex-1 overflow-hidden flex flex-col">
         <ErrorBoundary>
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/stores" element={<Stores />} />
-            <Route path="/products" element={<Products />} />
-            <Route path="/price-changes" element={<PriceChanges />} />
-            <Route path="/export" element={<Export />} />
-            <Route path="/diagnostics" element={<Diagnostics />} />
-            <Route path="/scraping-audit" element={<ScrapingAudit />} />
-            <Route path="/canonical-review" element={<CanonicalReview />} />
-            <Route path="/settings" element={<SettingsPage />} />
-            <Route path="/stores/:id" element={<StoreDetail />} />
-            {/* CW Import pipeline */}
-            <Route path="/cw-import" element={<CWImportUploadPage />} />
-            <Route path="/cw-import/history" element={<CWImportListPage />} />
-            <Route path="/cw-import/:jobId" element={<CWImportReviewPage />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
+          <Suspense fallback={<RouteLoader />}>
+            <Routes>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/stores" element={<Stores />} />
+              <Route path="/products" element={<Products />} />
+              <Route path="/price-changes" element={<PriceChanges />} />
+              <Route path="/export" element={<Export />} />
+              <Route path="/diagnostics" element={<Diagnostics />} />
+              <Route path="/scraping-audit" element={<ScrapingAudit />} />
+              <Route path="/canonical-review" element={<CanonicalReview />} />
+              <Route path="/settings" element={<SettingsPage />} />
+              <Route path="/stores/:id" element={<StoreDetail />} />
+              {/* CW Import pipeline */}
+              <Route path="/cw-import" element={<CWImportUploadPage />} />
+              <Route path="/cw-import/history" element={<CWImportListPage />} />
+              <Route path="/cw-import/:jobId" element={<CWImportReviewPage />} />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Suspense>
         </ErrorBoundary>
       </main>
     </div>

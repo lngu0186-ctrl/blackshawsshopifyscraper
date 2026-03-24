@@ -22,6 +22,30 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 3a route-level code splitting
+
+### Delivered
+- Converted page routes in `App.tsx` to `React.lazy()` + `Suspense` route loading
+- Split heavier pages into separate chunks instead of forcing them into the main entry bundle, including:
+  - Scraping Audit
+  - Canonical Review
+  - CW Import pages
+  - Products / Store Detail / Diagnostics / Export / Settings
+- Added a shared route loader fallback for lazy page transitions
+
+### Build impact
+- Main entry chunk dropped significantly from ~1.77 MB to ~730 kB minified
+- Heavy route bundles now load separately on navigation instead of up front
+- Remaining warning is now concentrated in a few large secondary chunks (notably StoreDetail/export-related code), rather than one oversized main app bundle
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Some large secondary chunks still remain and could benefit from deeper component-level splitting or manual chunking
+- StoreDetail and export-related logic are still comparatively heavy
+- This pass improves initial load substantially, but does not yet optimize every hot path equally
+
 ## 2026-03-24 — Phase 2d canonical review filters + source detail drawer
 
 ### Delivered
