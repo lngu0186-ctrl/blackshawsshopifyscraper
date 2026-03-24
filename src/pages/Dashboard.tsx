@@ -436,25 +436,22 @@ export default function Dashboard() {
 
           {/* ── Running progress banner ──────────────────────────────────────── */}
           {isRunning && (
-            <div className="bg-warning/8 border border-warning/20 rounded-2xl px-5 py-3 flex items-center gap-4 animate-fade-in">
-              <Loader2 className="w-4 h-4 animate-spin text-warning flex-shrink-0" />
-              <div className="flex-1 min-w-0 space-y-1.5">
+            <div className="bg-white border border-warning/25 rounded-2xl px-5 py-4 flex items-center gap-4 animate-fade-in shadow-card">
+              <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
+                <Loader2 className="w-4 h-4 animate-spin text-warning" />
+              </div>
+              <div className="flex-1 min-w-0 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="text-[12px] font-semibold text-foreground">
+                  <span className="text-[13px] font-semibold text-foreground">
                     Scraping {completedStores} / {totalStores} stores
                   </span>
-                  <span className="text-[11px] font-bold text-warning">{runProgress}%</span>
+                  <span className="text-[12px] font-bold text-warning tabular-nums">{runProgress}%</span>
                 </div>
                 <Progress value={runProgress} className="h-1.5" />
                 <div className="flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
                   <span>{(runData?.pages_visited ?? 0).toLocaleString()} pages</span>
-                  <span>
-                    {(runData?.collections_completed ?? 0).toLocaleString()}/{(runData?.collections_total ?? 0).toLocaleString()} collections
-                    {(runData?.collections_failed ?? 0) > 0 && <span className="text-destructive"> · {(runData?.collections_failed ?? 0)} failed</span>}
-                    {(runData?.collections_skipped ?? 0) > 0 && <span className="text-warning"> · {(runData?.collections_skipped ?? 0)} skipped</span>}
-                  </span>
-                  {runData?.active_store_name && <span>Active: <span className="text-foreground">{runData.active_store_name}</span></span>}
-                  {runData?.latest_message && <span className="truncate">{runData.latest_message}</span>}
+                  {runData?.active_store_name && <span>Active: <span className="text-foreground font-medium">{runData.active_store_name}</span></span>}
+                  {runData?.latest_message && <span className="truncate max-w-xs">{runData.latest_message}</span>}
                 </div>
               </div>
             </div>
