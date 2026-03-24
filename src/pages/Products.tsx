@@ -154,24 +154,75 @@ export default function Products() {
   const colCount = visibleColsArr.length + 1; // +1 for checkbox
 
   return (
-    <div className="h-full overflow-y-auto">
-      <div className="p-6 space-y-4 max-w-full">
-      {/* Page header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+
+      {/* ── Top Bar ───────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-border bg-white flex-shrink-0">
         <div>
-          <h1 className="text-2xl font-bold">All Products</h1>
-          <p className="text-sm text-muted-foreground">{total.toLocaleString()} products across all stores</p>
+          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">All Products</h1>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5">{total.toLocaleString()} products across all stores</p>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {selectedIds.size > 0 && (
+            <span className="text-[11px] text-muted-foreground">{selectedIds.size} selected</span>
+          )}
+          {selectedIds.size > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="h-8 text-[12px] rounded-xl gap-1.5">
+                  Bulk Actions <ChevronDown className="w-3 h-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem className="text-xs" onClick={() => bulkUpdateStatus.mutate({ ids: Array.from(selectedIds), status: 'approved' })}>
+                  <Check className="w-3 h-3 mr-1.5" /> Mark as Approved
+                </DropdownMenuItem>
+                <DropdownMenuItem className="text-xs" onClick={() => bulkUpdateStatus.mutate({ ids: Array.from(selectedIds), status: 'needs_review' })}>
+                  <AlertTriangle className="w-3 h-3 mr-1.5" /> Mark as Needs Review
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-xs" onClick={() => exportShopifyCsv.mutate({ productIds: Array.from(selectedIds) })}>
+                  <Download className="w-3 h-3 mr-1.5" /> Export selected (Shopify CSV)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="sm" className="h-8 text-[12px] rounded-xl gap-1.5 bg-foreground hover:bg-foreground/90 text-background font-semibold">
+                <Download className="w-3.5 h-3.5" /> Export <ChevronDown className="w-3 h-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-64 rounded-xl">
+              <DropdownMenuLabel className="text-xs">Shopify CSV</DropdownMenuLabel>
+              <DropdownMenuItem className="text-xs" onClick={() => exportShopifyCsv.mutate({ productIds: products.map((p: any) => p.id) })}>
+                Export visible rows ({products.length})
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-xs" onClick={() => exportAllFiltered('shopify_csv')}>
+                Export all filtered ({total.toLocaleString()})
+              </DropdownMenuItem>
+              {selectedIds.size > 0 && (
+                <DropdownMenuItem className="text-xs" onClick={() => exportShopifyCsv.mutate({ productIds: Array.from(selectedIds) })}>
+                  Export selected ({selectedIds.size})
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+              <DropdownMenuItem className="text-xs" onClick={() => exportAllFiltered('review_csv')}>
+                Export Review Required → CSV
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      {/* Toolbar */}
-      <div className="flex flex-wrap gap-2 items-center">
+      {/* ── Toolbar ─────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 px-6 py-3 border-b border-border bg-white flex flex-wrap gap-2 items-center">
         {/* Search */}
         <div className="relative">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <Input
             placeholder="Search title, vendor, tags…"
-            className="pl-8 h-8 text-sm w-56"
+            className="pl-8 h-8 text-[12px] w-56 rounded-xl bg-background border-border"
             value={filter.search || ''}
             onChange={e => update({ search: e.target.value || undefined })}
           />
