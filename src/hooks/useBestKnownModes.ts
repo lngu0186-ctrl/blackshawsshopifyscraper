@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from './useAuth';
+import type { Store } from '@/types/schemas';
 
 function inferRetryMode(settings: any): 'slow_pacing' | 'smaller_batch' | 'default' {
   if (!settings || typeof settings !== 'object') return 'default';
@@ -25,7 +26,7 @@ export function useBestKnownModes(storeIds?: string[]) {
     queryFn: async () => {
       let query = supabase
         .from('scrape_run_stores')
-        .select('store_id,status,page_count,product_count,collections_completed,scrape_runs!inner(settings,created_at)')
+        .select('store_id,status,page_count,product_count,collections_completed,scrape_runs!inner(settings,created_at),stores!inner(id,preferred_retry_mode)')
         .eq('user_id', user!.id)
         .order('updated_at', { ascending: false })
         .limit(400);
@@ -36,6 +37,7 @@ export function useBestKnownModes(storeIds?: string[]) {
 
       const rows = (data ?? []).map((row: any) => {
         const run = Array.isArray(row.scrape_runs) ? row.scrape_runs[0] : row.scrape_runs;
+        const store = Array.isArray(row.stores) ? row.stores[0] : row.stores;
         return {
           storeId: row.store_id,
           status: row.status,
@@ -44,6 +46,7 @@ export function useBestKnownModes(storeIds?: string[]) {
           collectionsCompleted: row.collections_completed ?? 0,
           createdAt: run?.created_at,
           mode: inferRetryMode(run?.settings),
+          preferredMode: (store?.preferred_retry_mode as Store['preferred_retry_mode']) || 'auto',
         };
       }).filter((r: any) => !!r.storeId);
 
@@ -54,8 +57,19 @@ export function useBestKnownModes(storeIds?: string[]) {
         byStore.set(row.storeId, list);
       }
 
-      const out: Record<string, { mode: 'slow_pacing' | 'smaller_batch' | 'default'; label: string; score: number }> = {};
+      const out: Record<string, { mode: 'slow_pacing' | 'smaller_batch' | 'default'; label: string; score: number; preferredMode: Store['preferred_retry_mode'] | 'auto' }> = {};
       for (const [storeId, storeRows] of byStore.entries()) {
+        const preferredMode = storeRows[0]?.preferredMode || 'auto';
+        if (preferredMode !== 'auto') {
+          out[storeId] = {
+            mode: preferredMode as any,
+            label: `${modeLabel(preferredMode)} (pinned)`,
+            score: 999,
+            preferredMode,
+          };
+          continue;
+        }
+
         const scored = new Map<string, number>();
         for (let i = 0; i < storeRows.length; i++) {
           const entry = storeRows[i];
@@ -76,7 +90,7 @@ export function useBestKnownModes(storeIds?: string[]) {
           scored.set(entry.mode, score);
         }
         const [bestMode, bestScore] = [...scored.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['default', 0];
-        out[storeId] = { mode: bestMode as any, label: modeLabel(bestMode), score: bestScore };
+        out[storeId] = { mode: bestMode as any, label: modeLabel(bestMode), score: bestScore, preferredMode };
       }
 
       return out;

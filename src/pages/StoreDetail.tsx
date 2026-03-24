@@ -21,6 +21,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
 
 // ── Health badge ───────────────────────────────────────────────────────────────
@@ -246,11 +247,27 @@ export default function StoreDetail() {
               <h2 className="text-[13px] font-bold text-foreground">Retry History</h2>
               <p className="text-[11px] text-muted-foreground mt-0.5">See whether smaller-batch or slow-pacing retries improved outcomes for this store.</p>
             </div>
-            {bestKnownMode && (
-              <Badge variant="outline" className="text-[10px]">
-                Best known mode: {bestKnownMode.label}
-              </Badge>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {bestKnownMode && (
+                <Badge variant="outline" className="text-[10px]">
+                  Best known mode: {bestKnownMode.label}
+                </Badge>
+              )}
+              <Select
+                value={(store as any).preferred_retry_mode || 'auto'}
+                onValueChange={(value) => updateStore.mutate({ id: store.id, preferred_retry_mode: value as any } as any)}
+              >
+                <SelectTrigger className="h-8 w-[190px] text-[11px]">
+                  <SelectValue placeholder="Preferred retry mode" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="auto">Auto</SelectItem>
+                  <SelectItem value="default">Default</SelectItem>
+                  <SelectItem value="smaller_batch">Smaller batch</SelectItem>
+                  <SelectItem value="slow_pacing">Slow pacing</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <div className="space-y-2">
             {retryHistory.map((entry: any) => (

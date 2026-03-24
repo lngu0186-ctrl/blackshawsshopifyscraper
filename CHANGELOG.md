@@ -22,6 +22,26 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4l manual preferred retry mode override
+
+### Delivered
+- Added additive migration for per-store `preferred_retry_mode` with supported values:
+  - `auto`
+  - `default`
+  - `smaller_batch`
+  - `slow_pacing`
+- Updated best-known mode derivation so manual store preference overrides the inferred mode when set
+- Added Store Detail selector for manually pinning a store’s preferred retry mode
+- This gives operators explicit control when they know a store should always use a particular retry strategy
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- The new preference field requires Supabase migration deployment before it will persist in the hosted environment
+- Manual override UI currently lives on Store Detail only
+- Diagnostics and bulk workflows will respect the pinned mode once the underlying field exists live and store data is refreshed
+
 ## 2026-03-24 — Phase 4k best-known mode in Diagnostics + bulk workflows
 
 ### Delivered

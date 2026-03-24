@@ -22,6 +22,7 @@ export const StoreSchema = z.object({
   total_products: z.number(),
   created_at: z.string(),
   updated_at: z.string(),
+  preferred_retry_mode: z.enum(['auto', 'default', 'smaller_batch', 'slow_pacing']).default('auto').optional(),
 });
 export type Store = z.infer<typeof StoreSchema>;
 
