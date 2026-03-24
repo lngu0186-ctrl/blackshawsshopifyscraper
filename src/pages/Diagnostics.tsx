@@ -313,7 +313,7 @@ export default function Diagnostics() {
                 </Select>
 
                 <Select value={sortBy} onValueChange={v => setSortBy(v as any)}>
-                  <SelectTrigger className="h-8 text-[11px] w-36">
+                  <SelectTrigger className="h-8 text-[11px] w-36 rounded-xl">
                     <ArrowUpDown className="w-3 h-3 mr-1" />
                     <SelectValue placeholder="Sort" />
                   </SelectTrigger>
@@ -331,7 +331,7 @@ export default function Diagnostics() {
               <div className="overflow-auto">
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-border bg-muted/30">
+                    <tr className="border-b border-border bg-muted/20">
                       {['Risk', 'Store', 'Reason', 'Recommended Action', 'Best Mode', 'Products', 'Errors 7d', 'Warnings 7d', 'Latest Run', 'Last Success', 'Failure Delta', 'Last Scraped', 'Actions'].map(h => (
                         <th key={h} className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">
                           {h}
