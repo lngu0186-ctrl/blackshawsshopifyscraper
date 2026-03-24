@@ -22,6 +22,27 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 5b Stores + Diagnostics visual polish
+
+### Delivered
+- Applied the premium dashboard visual language to **Stores** and **Diagnostics** so they match the redesigned dashboard shell
+- Added hero/header treatment to both pages with:
+  - stronger heading hierarchy
+  - contextual subtitle
+  - pill metadata label
+  - cleaner action cluster
+- Upgraded controls and filters to softer pill-shaped surfaces
+- Reworked major cards/tables into calmer white rounded containers with more whitespace and softer hierarchy
+- Improved visual consistency between KPI areas, search/filter rows, and action bars across operational screens
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- This pass focuses on Stores + Diagnostics and does not yet carry the same full premium treatment through every secondary page
+- Some dense table internals could still be refined further with spacing/typography tweaks on a per-column basis
+- The remaining bundle-size warning is unchanged by this visual polish work
+
 ## 2026-03-24 — Phase 5a dashboard shell polish
 
 ### Delivered

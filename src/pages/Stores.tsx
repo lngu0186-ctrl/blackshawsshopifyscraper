@@ -93,41 +93,47 @@ export default function Stores() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-
-      {/* ── Top Bar ───────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-border bg-white flex-shrink-0">
-        <div>
-          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Stores</h1>
-          <p className="text-[11.5px] text-muted-foreground mt-0.5">Source library — health, auth, diagnostics</p>
-        </div>
-        <div className="flex items-center gap-2">
-          {selected.length > 0 && (
-            <>
-              <span className="text-[11px] text-muted-foreground">{selected.length} selected</span>
-              <Button size="sm" variant="outline" className="h-8 text-[12px] rounded-xl gap-1.5"
-                onClick={() => revalidateStores.mutate(selectedStores)}
-                disabled={revalidateStores.isPending}>
-                <RefreshCcw className="w-3 h-3" /> Revalidate
+      <div className="px-6 pt-6 pb-3 flex-shrink-0">
+        <div className="card-surface-md px-6 py-5">
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div className="space-y-2">
+              <div className="pill bg-muted/60 text-muted-foreground border border-border uppercase tracking-[0.18em] text-[10px]">
+                Source library
+              </div>
+              <div>
+                <h1 className="text-[34px] leading-none font-black tracking-tight text-foreground">Stores</h1>
+                <p className="text-[13px] text-muted-foreground mt-2 max-w-2xl">Monitor store health, authentication, retry strategy, and scrape readiness from one calmer control surface.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              {selected.length > 0 && <span className="text-[11px] text-muted-foreground px-2">{selected.length} selected</span>}
+              {selected.length > 0 && (
+                <>
+                  <Button size="sm" variant="outline" className="h-10 text-[12px] rounded-full gap-1.5 px-4 bg-white"
+                    onClick={() => revalidateStores.mutate(selectedStores)}
+                    disabled={revalidateStores.isPending}>
+                    <RefreshCcw className="w-3.5 h-3.5" /> Revalidate
+                  </Button>
+                  <Button size="sm" className="h-10 text-[12px] rounded-full bg-foreground hover:bg-foreground/90 text-background font-semibold gap-1.5 px-4"
+                    onClick={() => scrapeStores.mutate({
+                      storeIds: selectedStores.map(s => s.id),
+                      modeByStore: Object.fromEntries(selectedStores.map(s => [s.id, bestKnownModes?.[s.id]?.mode ?? 'default'])),
+                      modeLabel: 'Best-known mode bulk scrape',
+                    })}
+                    disabled={scrapeStores.isPending}>
+                    Scrape selected
+                  </Button>
+                </>
+              )}
+              <Button size="sm" variant="outline" className="h-10 text-[12px] rounded-full gap-1.5 px-4 bg-white" asChild>
+                <Link to="/diagnostics"><ExternalLink className="w-3.5 h-3.5" /> Diagnostics</Link>
               </Button>
-              <Button size="sm" className="h-8 text-[12px] rounded-xl bg-foreground hover:bg-foreground/90 text-background font-semibold gap-1.5"
-                onClick={() => scrapeStores.mutate({
-                  storeIds: selectedStores.map(s => s.id),
-                  modeByStore: Object.fromEntries(selectedStores.map(s => [s.id, bestKnownModes?.[s.id]?.mode ?? 'default'])),
-                  modeLabel: 'Bulk scrape',
-                })}
-                disabled={scrapeStores.isPending}>
-                Scrape selected
-              </Button>
-            </>
-          )}
-          <Button size="sm" variant="outline" className="h-8 text-[12px] rounded-xl gap-1.5" asChild>
-            <Link to="/diagnostics"><ExternalLink className="w-3 h-3" /> Diagnostics</Link>
-          </Button>
+            </div>
+          </div>
         </div>
       </div>
 
-      {/* ── KPI Strip ─────────────────────────────────────────── */}
-      <div className="flex-shrink-0 px-6 py-3 border-b border-border bg-white">
+      <div className="flex-shrink-0 px-6 py-3">
         <div className="flex items-center gap-6">
           {[
             { label: 'Total', value: counts.total, dot: 'bg-muted-foreground/30' },
@@ -135,7 +141,7 @@ export default function Stores() {
             { label: 'Warning', value: counts.warning, dot: 'bg-warning' },
             { label: 'Error', value: counts.error, dot: 'bg-destructive' },
           ].map(({ label, value, dot }) => (
-            <div key={label} className="flex items-center gap-2">
+            <div key={label} className="card-surface px-4 py-3 flex items-center gap-2 min-w-[120px]">
               <span className={`w-2 h-2 rounded-full flex-shrink-0 ${dot}`} />
               <span className="text-[12px] font-bold text-foreground tabular-nums">{value}</span>
               <span className="text-[11px] text-muted-foreground">{label}</span>
@@ -147,18 +153,18 @@ export default function Stores() {
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <Input
                 placeholder="Search stores…"
-                className="pl-8 h-8 text-[12px] w-52 rounded-xl bg-background border-border"
+                className="pl-8 h-8 text-[12px] w-52 rounded-[22px] bg-background border-border"
                 value={search}
                 onChange={e => setSearch(e.target.value)}
               />
             </div>
             {/* Select all */}
-            <Button size="sm" variant="outline" className="h-8 text-[12px] rounded-xl"
+            <Button size="sm" variant="outline" className="h-8 text-[12px] rounded-[22px]"
               onClick={toggleSelectAll} disabled={isLoading || !(stores?.length)}>
               {selected.length === (stores?.length ?? 0) && selected.length > 0 ? 'Clear' : 'Select all'}
             </Button>
             {/* View toggle */}
-            <div className="flex items-center border border-border rounded-xl overflow-hidden">
+            <div className="flex items-center border border-border rounded-[22px] overflow-hidden">
               <button
                 onClick={() => setView('grid')}
                 className={`px-2.5 py-1.5 transition-colors ${view === 'grid' ? 'bg-foreground text-background' : 'bg-white text-muted-foreground hover:bg-muted/40'}`}
@@ -184,7 +190,7 @@ export default function Stores() {
           {view === 'grid' && (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {isLoading && Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-2xl border border-border shadow-card p-5 space-y-3">
+                <div key={i} className="card-surface p-5 space-y-3">
                   <Skeleton className="h-4 w-32" />
                   <Skeleton className="h-3 w-full" />
                   <Skeleton className="h-3 w-24" />
@@ -202,7 +208,7 @@ export default function Stores() {
                 return (
                   <div
                     key={store.id}
-                    className={`bg-white rounded-2xl border shadow-card transition-all hover:shadow-card-md group ${
+                    className={`bg-white rounded-[28px] border shadow-card transition-all hover:shadow-card-md group ${
                       selected.includes(store.id) ? 'border-primary/40 ring-1 ring-primary/20' : 'border-border'
                     }`}
                   >
@@ -271,17 +277,17 @@ export default function Stores() {
 
                     {/* Actions */}
                     <div className="px-4 py-3 border-t border-border/50 flex items-center gap-1.5">
-                      <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-lg flex-1"
+                      <Button variant="outline" size="sm" className="h-7 text-[11px] rounded-full flex-1"
                         onClick={() => revalidateStores.mutate([store])}
                         disabled={revalidateStores.isPending}>
                         Revalidate
                       </Button>
-                      <Button size="sm" className="h-7 text-[11px] rounded-lg flex-1 bg-foreground hover:bg-foreground/90 text-background font-semibold"
+                      <Button size="sm" className="h-7 text-[11px] rounded-full flex-1 bg-foreground hover:bg-foreground/90 text-background font-semibold"
                         onClick={() => scrapeStores.mutate({ storeIds: [store.id], modeLabel: 'Store scrape' })}
                         disabled={scrapeStores.isPending}>
                         Scrape now
                       </Button>
-                      <Button asChild variant="ghost" size="sm" className="h-7 text-[11px] rounded-lg text-muted-foreground">
+                      <Button asChild variant="ghost" size="sm" className="h-7 text-[11px] rounded-full text-muted-foreground">
                         <Link to={`/diagnostics?store=${store.id}`}>Diag</Link>
                       </Button>
                     </div>
@@ -293,7 +299,7 @@ export default function Stores() {
 
           {/* List view */}
           {view === 'list' && (
-            <div className="bg-white rounded-2xl border border-border shadow-card overflow-hidden">
+            <div className="card-surface overflow-hidden">
               <table className="w-full text-[12px]">
                 <thead>
                   <tr className="border-b border-border bg-muted/20">
@@ -353,11 +359,11 @@ export default function Stores() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1">
-                            <Button variant="outline" size="sm" className="h-6 text-[10px] rounded-lg px-2"
+                            <Button variant="outline" size="sm" className="h-6 text-[10px] rounded-full px-2"
                               onClick={() => revalidateStores.mutate([store])} disabled={revalidateStores.isPending}>
                               Revalidate
                             </Button>
-                            <Button size="sm" className="h-6 text-[10px] rounded-lg px-2 bg-foreground hover:bg-foreground/90 text-background"
+                            <Button size="sm" className="h-6 text-[10px] rounded-full px-2 bg-foreground hover:bg-foreground/90 text-background"
                               onClick={() => scrapeStores.mutate({ storeIds: [store.id], modeLabel: 'Store scrape' })}
                               disabled={scrapeStores.isPending}>
                               Scrape
@@ -374,7 +380,7 @@ export default function Stores() {
 
           {/* Empty state */}
           {!isLoading && filteredStores.length === 0 && (
-            <div className="bg-white rounded-2xl border border-dashed border-border p-16 text-center">
+            <div className="bg-white rounded-[28px] border border-dashed border-border p-16 text-center">
               <StoreIcon className="w-8 h-8 text-muted-foreground/40 mx-auto mb-3" />
               <p className="text-[13px] font-semibold text-foreground mb-1">
                 {search ? 'No stores match your search' : 'No stores yet'}

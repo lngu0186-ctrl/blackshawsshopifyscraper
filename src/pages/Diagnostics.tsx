@@ -27,7 +27,7 @@ function SeverityBadge({ severity }: { severity: string }) {
     critical: 'bg-destructive/30 text-destructive border-destructive/50 font-bold',
   };
   return (
-    <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded-md text-[10px] font-semibold border', map[severity] ?? 'bg-muted text-muted-foreground')}>
+    <span className={cn('inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-semibold border', map[severity] ?? 'bg-muted text-muted-foreground')}>
       {severity.toUpperCase()}
     </span>
   );
@@ -212,29 +212,36 @@ export default function Diagnostics() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      <div className="flex-shrink-0 border-b border-border px-6 py-3.5 flex items-center justify-between bg-white">
-        <div>
-          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Diagnostics</h1>
-          <p className="text-[11.5px] text-muted-foreground mt-0.5">
-            Store-first risk queue with supporting scraper evidence
-          </p>
+      <div className="px-6 pt-6 pb-3 flex-shrink-0">
+        <div className="card-surface-md px-6 py-5">
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div className="space-y-2">
+              <div className="pill bg-muted/60 text-muted-foreground border border-border uppercase tracking-[0.18em] text-[10px]">
+                Risk operations
+              </div>
+              <div>
+                <h1 className="text-[34px] leading-none font-black tracking-tight text-foreground">Diagnostics</h1>
+                <p className="text-[13px] text-muted-foreground mt-2 max-w-2xl">A store-first risk queue with clearer reasons, recommended actions, retry signals, and supporting scrape evidence.</p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="gap-2 text-[12px] h-10 rounded-full px-4 bg-white"
+              onClick={handleAISummary}
+              disabled={analyzeFailure.isPending || isEmpty}
+            >
+              {analyzeFailure.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-primary" />}
+              AI Summary
+            </Button>
+          </div>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-2 text-[12px] h-8 rounded-xl"
-          onClick={handleAISummary}
-          disabled={analyzeFailure.isPending || isEmpty}
-        >
-          {analyzeFailure.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-primary" />}
-          AI Summary
-        </Button>
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="p-6 space-y-6">
+        <div className="px-6 pb-8 space-y-7">
           {isEmpty && (
-            <div className="bg-card rounded-2xl border border-dashed border-border p-10 text-center">
+            <div className="bg-card rounded-[28px] border border-dashed border-border p-10 text-center">
               <Activity className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
               <p className="text-[13px] font-semibold text-foreground mb-1">No diagnostics recorded yet</p>
               <p className="text-[12px] text-muted-foreground">Run a scrape to generate store risk signals and event evidence.</p>
@@ -250,9 +257,9 @@ export default function Diagnostics() {
                 { label: 'Critical Errors', value: summary?.criticalErrors ?? 0, icon: ShieldAlert, color: 'text-destructive', bg: 'bg-destructive/8' },
                 { label: 'Warnings', value: summary?.warnings ?? 0, icon: BarChart3, color: 'text-warning', bg: 'bg-warning/8' },
               ].map(({ label, value, icon: Icon, color, bg }) => (
-                <div key={label} className="bg-white rounded-2xl border border-border p-4 shadow-card">
+                <div key={label} className="bg-white rounded-[28px] border border-border p-4 shadow-card">
                   <div className="flex items-center gap-2 mb-3">
-                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${bg}`}>
+                    <div className={`w-7 h-7 rounded-[18px] flex items-center justify-center ${bg}`}>
                       <Icon className={cn('w-3.5 h-3.5', color)} />
                     </div>
                     <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
@@ -268,7 +275,7 @@ export default function Diagnostics() {
           )}
 
           {runSummaryAnalysis && (
-            <div className="bg-card rounded-2xl border border-primary/30 p-5 shadow-card">
+            <div className="bg-card rounded-[28px] border border-primary/30 p-5 shadow-card">
               <div className="flex items-center gap-2 mb-3">
                 <Sparkles className="w-4 h-4 text-primary" />
                 <p className="text-[13px] font-semibold text-foreground">AI Health Summary</p>
@@ -280,7 +287,7 @@ export default function Diagnostics() {
           )}
 
           {!isEmpty && (
-            <div className="bg-white rounded-2xl border border-border shadow-card overflow-hidden">
+            <div className="card-surface overflow-hidden">
               <div className="p-4 border-b border-border flex items-center gap-3 flex-wrap">
                 <div className="relative flex-1 min-w-[220px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
@@ -288,12 +295,12 @@ export default function Diagnostics() {
                     value={storeSearch}
                     onChange={e => setStoreSearch(e.target.value)}
                     placeholder="Search store name, URL, reason…"
-                    className="pl-9 h-8 text-[12px] rounded-xl"
+                    className="pl-9 h-8 text-[12px] rounded-[22px]"
                   />
                 </div>
 
                 <Select value={riskFilter} onValueChange={setRiskFilter}>
-                  <SelectTrigger className="h-8 text-[11px] w-40 rounded-xl">
+                  <SelectTrigger className="h-8 text-[11px] w-40 rounded-[22px]">
                     <Filter className="w-3 h-3 mr-1" />
                     <SelectValue placeholder="Risk" />
                   </SelectTrigger>
@@ -313,7 +320,7 @@ export default function Diagnostics() {
                 </Select>
 
                 <Select value={sortBy} onValueChange={v => setSortBy(v as any)}>
-                  <SelectTrigger className="h-8 text-[11px] w-36 rounded-xl">
+                  <SelectTrigger className="h-8 text-[11px] w-36 rounded-[22px]">
                     <ArrowUpDown className="w-3 h-3 mr-1" />
                     <SelectValue placeholder="Sort" />
                   </SelectTrigger>
@@ -447,7 +454,7 @@ export default function Diagnostics() {
           )}
 
           {!isEmpty && (
-            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+            <div className="card-surface overflow-hidden">
               <div className="flex items-center justify-between p-4 border-b border-border">
                 <div>
                   <h2 className="text-[13px] font-semibold text-foreground">Event Evidence</h2>
