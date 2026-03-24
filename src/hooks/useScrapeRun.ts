@@ -33,6 +33,9 @@ export function useScrapeRun() {
 
     if (runRes.data) {
       setRunData(runRes.data as ScrapeRun);
+      if (runRes.data.last_event_at) {
+        lastEventTimeRef.current = new Date(runRes.data.last_event_at).getTime();
+      }
       if (['completed', 'cancelled', 'failed'].includes(runRes.data.status)) {
         setStatus(runRes.data.status as RunStatus);
         stopStallTimer();
@@ -80,6 +83,7 @@ export function useScrapeRun() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_run_stores', filter: `scrape_run_id=eq.${runId}` }, () => { pollData(runId); resetStall(); })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'scrape_runs', filter: `id=eq.${runId}` }, () => { pollData(runId); resetStall(); })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'scrape_logs', filter: `scrape_run_id=eq.${runId}` }, () => { pollData(runId); resetStall(); })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'scraper_events', filter: `run_id=eq.${runId}` }, () => { pollData(runId); resetStall(); })
       .subscribe();
     pollingRef.current = setInterval(() => pollData(runId), 3000);
     return () => { supabase.removeChannel(channel); if (pollingRef.current) clearInterval(pollingRef.current); };

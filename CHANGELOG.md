@@ -22,6 +22,30 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 2a run observability + canonical schema groundwork
+
+### Delivered
+- Improved scraper control/observability on the current app side:
+  - added `useRunObservability` for richer recent-run summaries
+  - upgraded dashboard running-state banner with pages visited, collection progress, active store, and latest message
+  - upgraded recent-run summary with more truthful run outcomes, completion/failure rate, and average pages-per-run
+  - hardened `useScrapeRun` to reset stall timing from `scraper_events` and `last_event_at`, not just legacy logs
+- Added additive schema groundwork for a future canonical model via Supabase migration:
+  - `canonical_products`
+  - `product_source_records`
+  - `canonical_product_matches`
+- The canonical groundwork uses a junction-table pattern between canonical products and source records, without disrupting the current live `products` table workflow
+- Added run-level observability columns to `scrape_runs` for active store, latest message, collection totals, and last-event timestamps
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- The new observability UI assumes the new `scrape_runs` fields will exist after migration deployment; until then, some values will remain blank/zero in live environments
+- The canonical schema is groundwork only — current scraping/export flows still operate on existing `products` and related tables
+- No automated backfill from current `products` into `product_source_records` / `canonical_product_matches` has been added yet
+
 ## 2026-03-24 — Phase 1i runbook actions in Stores + Store Detail
 
 ### Delivered

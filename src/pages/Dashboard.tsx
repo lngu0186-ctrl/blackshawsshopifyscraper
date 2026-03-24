@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useStores } from '@/hooks/useStores';
 import { useScrapeRun } from '@/hooks/useScrapeRun';
+import { useRunObservabilitySummary } from '@/hooks/useRunObservability';
 import { useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
 import { usePipelineStats } from '@/hooks/usePipelineStats';
 import { SITE_ADAPTERS } from '@/lib/siteAdapters';
@@ -257,6 +258,7 @@ export default function Dashboard() {
   const { data: stores, isLoading: storesLoading } = useStores();
   const queryClient = useQueryClient();
   const { status: scrapeStatus, runData, storeStatuses, logs, startRun, cancelRun, resetRun, isRunning } = useScrapeRun();
+  const { summary: runObservability, runs: recentRuns } = useRunObservabilitySummary();
   const { data: pipeline, isLoading: pipelineLoading } = usePipelineStats();
   const [searchTerm, setSearchTerm] = useState('');
   const scrapeSource = useScrapeSource();
@@ -437,14 +439,24 @@ export default function Dashboard() {
           {isRunning && (
             <div className="bg-warning/8 border border-warning/20 rounded-2xl px-5 py-3 flex items-center gap-4 animate-fade-in">
               <Loader2 className="w-4 h-4 animate-spin text-warning flex-shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between mb-1.5">
+              <div className="flex-1 min-w-0 space-y-1.5">
+                <div className="flex items-center justify-between">
                   <span className="text-[12px] font-semibold text-foreground">
                     Scraping {completedStores} / {totalStores} stores
                   </span>
                   <span className="text-[11px] font-bold text-warning">{runProgress}%</span>
                 </div>
                 <Progress value={runProgress} className="h-1.5" />
+                <div className="flex items-center gap-4 text-[11px] text-muted-foreground flex-wrap">
+                  <span>{(runData?.pages_visited ?? 0).toLocaleString()} pages</span>
+                  <span>
+                    {(runData?.collections_completed ?? 0).toLocaleString()}/{(runData?.collections_total ?? 0).toLocaleString()} collections
+                    {(runData?.collections_failed ?? 0) > 0 && <span className="text-destructive"> · {(runData?.collections_failed ?? 0)} failed</span>}
+                    {(runData?.collections_skipped ?? 0) > 0 && <span className="text-warning"> · {(runData?.collections_skipped ?? 0)} skipped</span>}
+                  </span>
+                  {runData?.active_store_name && <span>Active: <span className="text-foreground">{runData.active_store_name}</span></span>}
+                  {runData?.latest_message && <span className="truncate">{runData.latest_message}</span>}
+                </div>
               </div>
             </div>
           )}
@@ -659,13 +671,33 @@ export default function Dashboard() {
               </div>
 
               {/* Last run summary */}
-              {lastScraped && (
-                <div className="bg-card rounded-2xl border border-border shadow-card px-4 py-3">
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
-                    <Clock className="w-3.5 h-3.5 flex-shrink-0" />
-                    <span>Last scraped: <span className="font-medium text-foreground">{lastScraped.name}</span></span>
-                    <span className="ml-auto">{new Date(lastScraped.last_scraped_at!).toLocaleString()}</span>
-                  </div>
+              {(lastScraped || recentRuns.length > 0) && (
+                <div className="bg-card rounded-2xl border border-border shadow-card px-4 py-3 space-y-2">
+                  {lastScraped && (
+                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <Clock className="w-3.5 h-3.5 flex-shrink-0" />
+                      <span>Last scraped: <span className="font-medium text-foreground">{lastScraped.name}</span></span>
+                      <span className="ml-auto">{new Date(lastScraped.last_scraped_at!).toLocaleString()}</span>
+                    </div>
+                  )}
+                  {runObservability.latestFinished && (
+                    <div className="text-[11px] text-muted-foreground space-y-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <span>Latest run: <span className="text-foreground font-medium">{runObservability.latestFinished.run_status || runObservability.latestFinished.status}</span></span>
+                        <span>{runObservability.latestFinished.finished_at ? new Date(runObservability.latestFinished.finished_at).toLocaleString() : 'In progress'}</span>
+                      </div>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <span>{(runObservability.latestFinished.total_products ?? 0).toLocaleString()} products</span>
+                        <span>{(runObservability.latestFinished.pages_visited ?? 0).toLocaleString()} pages</span>
+                        <span>{(runObservability.latestFinished.collections_completed ?? 0).toLocaleString()} collections completed</span>
+                      </div>
+                      <div className="flex items-center gap-4 flex-wrap">
+                        <span>Completion rate: <span className="text-foreground">{runObservability.completionRate}%</span></span>
+                        <span>Failure rate: <span className="text-foreground">{runObservability.failureRate}%</span></span>
+                        <span>Avg pages/run: <span className="text-foreground">{runObservability.avgPagesVisited}</span></span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
