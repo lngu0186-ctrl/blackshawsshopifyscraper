@@ -5,7 +5,7 @@ import {
   Activity, Settings, Plus, Loader2, ToggleLeft, ToggleRight,
   Trash2, Pill, ChevronDown, ChevronUp, LogOut, Lock, ShieldAlert,
   Store, Stethoscope, CheckCheck, XCircle, AlertTriangle, Filter, SearchCode,
-  ShoppingCart,
+  ShoppingCart, GitMerge,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -44,6 +44,7 @@ const NAV_SECTIONS = [
       { to: '/export', icon: Download, label: 'Exports', end: false },
       { to: '/diagnostics', icon: Stethoscope, label: 'Diagnostics', end: false },
       { to: '/scraping-audit', icon: SearchCode, label: 'Scraping Audit', end: false },
+      { to: '/canonical-review', icon: GitMerge, label: 'Canonical Review', end: false },
       { to: '/cw-import', icon: ShoppingCart, label: 'CW Import', end: false },
     ],
   },

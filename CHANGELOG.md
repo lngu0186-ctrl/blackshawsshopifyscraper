@@ -22,6 +22,29 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 2b canonical backfill + review UI + sharper run failure summaries
+
+### Delivered
+- Added additive backfill migration from current `products` into canonical groundwork tables:
+  - backfills `product_source_records`
+  - seeds `canonical_products`
+  - creates junction rows in `canonical_product_matches`
+- Added first-pass **Canonical Review** UI for reviewing pending/rejected match decisions
+- Added `useCanonicalMatches` hook for loading and actioning canonical match queue items
+- Added clearer store-level failure visibility to latest run summaries:
+  - count of store errors
+  - count of collection failures
+  - retry/fallback hints inferred from terminal/message state
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Canonical backfill is migration-based groundwork and has not yet been deployed/applied to the hosted Supabase environment
+- Canonical Review is a first-pass queue UI, not a complete merge/conflict-resolution workbench yet
+- Retry/fallback hints are currently inferred from stored terminal/message text rather than from a dedicated retry counter field
+
 ## 2026-03-24 — Phase 2a run observability + canonical schema groundwork
 
 ### Delivered

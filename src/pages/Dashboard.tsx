@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
 import { useStores } from '@/hooks/useStores';
 import { useScrapeRun } from '@/hooks/useScrapeRun';
-import { useRunObservabilitySummary } from '@/hooks/useRunObservability';
+import { useRunObservabilitySummary, useRunStoreBreakdown } from '@/hooks/useRunObservability';
 import { useScrapeSource, useEnrichProducts, useCreateScrapeJob } from '@/hooks/useScrapedProducts';
 import { usePipelineStats } from '@/hooks/usePipelineStats';
 import { SITE_ADAPTERS } from '@/lib/siteAdapters';
@@ -259,6 +259,7 @@ export default function Dashboard() {
   const queryClient = useQueryClient();
   const { status: scrapeStatus, runData, storeStatuses, logs, startRun, cancelRun, resetRun, isRunning } = useScrapeRun();
   const { summary: runObservability, runs: recentRuns } = useRunObservabilitySummary();
+  const { data: latestRunStores } = useRunStoreBreakdown(runObservability.latestFinished?.id);
   const { data: pipeline, isLoading: pipelineLoading } = usePipelineStats();
   const [searchTerm, setSearchTerm] = useState('');
   const scrapeSource = useScrapeSource();
@@ -691,6 +692,19 @@ export default function Dashboard() {
                         <span>{(runObservability.latestFinished.pages_visited ?? 0).toLocaleString()} pages</span>
                         <span>{(runObservability.latestFinished.collections_completed ?? 0).toLocaleString()} collections completed</span>
                       </div>
+                      {latestRunStores && latestRunStores.length > 0 && (
+                        <div className="flex items-center gap-4 flex-wrap">
+                          <span>
+                            Store failures: <span className="text-foreground">{latestRunStores.filter((s: any) => s.status === 'error').length}</span>
+                          </span>
+                          <span>
+                            Collection failures: <span className="text-foreground">{latestRunStores.reduce((sum: number, s: any) => sum + (s.collections_failed ?? 0), 0)}</span>
+                          </span>
+                          <span>
+                            Retry/fallback hints: <span className="text-foreground">{latestRunStores.filter((s: any) => String(s.terminal_status || s.message || '').toLowerCase().includes('retry')).length + latestRunStores.filter((s: any) => String(s.terminal_status || s.message || '').toLowerCase().includes('fallback')).length}</span>
+                          </span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-4 flex-wrap">
                         <span>Completion rate: <span className="text-foreground">{runObservability.completionRate}%</span></span>
                         <span>Failure rate: <span className="text-foreground">{runObservability.failureRate}%</span></span>

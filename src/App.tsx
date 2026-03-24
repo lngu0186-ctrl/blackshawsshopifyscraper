@@ -14,6 +14,7 @@ import SettingsPage from "./pages/Settings";
 import StoreDetail from "./pages/StoreDetail";
 import Stores from "./pages/Stores";
 import ScrapingAudit from "./pages/ScrapingAudit";
+import CanonicalReview from "./pages/CanonicalReview";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
 import CWImportUploadPage from "./pages/cw-import/index";
@@ -96,6 +97,7 @@ function AppLayout() {
             <Route path="/export" element={<Export />} />
             <Route path="/diagnostics" element={<Diagnostics />} />
             <Route path="/scraping-audit" element={<ScrapingAudit />} />
+            <Route path="/canonical-review" element={<CanonicalReview />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="/stores/:id" element={<StoreDetail />} />
             {/* CW Import pipeline */}

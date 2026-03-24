@@ -23,6 +23,25 @@ export function useRecentRunSummaries(limit = 8) {
   });
 }
 
+export function useRunStoreBreakdown(runId?: string | null) {
+  const { user } = useAuth();
+
+  return useQuery({
+    queryKey: ['run_store_breakdown', user?.id, runId],
+    enabled: !!user && !!runId,
+    staleTime: 10_000,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('scrape_run_stores')
+        .select('id,store_id,status,terminal_status,message,product_count,page_count,collections_completed,collections_failed,collections_skipped,updated_at,finished_at')
+        .eq('user_id', user!.id)
+        .eq('scrape_run_id', runId!);
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+}
+
 export function useRunObservabilitySummary(limit = 8) {
   const { data: runs, isLoading } = useRecentRunSummaries(limit);
 
