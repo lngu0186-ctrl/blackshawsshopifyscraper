@@ -5,7 +5,7 @@ import {
   Activity, Settings, Plus, Loader2, ToggleLeft, ToggleRight,
   Trash2, Pill, ChevronDown, ChevronUp, LogOut, Lock, ShieldAlert,
   Store, Stethoscope, CheckCheck, XCircle, AlertTriangle, Filter, SearchCode,
-  ShoppingCart, GitMerge,
+  ShoppingCart, GitMerge, TrendingUp,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -35,7 +35,7 @@ const NAV_SECTIONS = [
       { to: '/', icon: LayoutDashboard, label: 'Dashboard', end: true },
       { to: '/stores', icon: Store, label: 'Stores', end: false },
       { to: '/products', icon: Package, label: 'Products', end: false },
-      { to: '/price-changes', icon: Activity, label: 'Price Changes', end: false },
+      { to: '/price-changes', icon: TrendingUp, label: 'Price Changes', end: false },
     ],
   },
   {
@@ -63,14 +63,14 @@ function NavItem({ to, icon: Icon, label, end }: { to: string; icon: any; label:
   return (
     <RouterNavLink to={to}>
       <div className={cn(
-        'flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-150',
+        'flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-medium transition-all duration-150',
         active
           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-          : 'text-sidebar-foreground hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground'
+          : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
       )}>
-        <Icon className={cn('w-4 h-4 flex-shrink-0', active ? 'text-sidebar-primary' : '')} />
+        <Icon className={cn('w-3.5 h-3.5 flex-shrink-0', active ? 'text-sidebar-primary' : 'opacity-70')} />
         <span>{label}</span>
-        {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-sidebar-primary" />}
+        {active && <div className="ml-auto w-1 h-1 rounded-full bg-sidebar-primary opacity-80" />}
       </div>
     </RouterNavLink>
   );
@@ -79,14 +79,14 @@ function NavItem({ to, icon: Icon, label, end }: { to: string; icon: any; label:
 type StoreFilter = 'all' | 'enabled' | 'disabled' | 'healthy' | 'warning' | 'failed';
 
 function storeHealthDot(store: StoreType) {
-  if (!store.enabled) return 'bg-muted-foreground/30';
+  if (!store.enabled) return 'bg-sidebar-muted/40';
   const h = (store as any).health_status;
   if (h === 'healthy') return 'bg-success';
   if (h === 'warning') return 'bg-warning';
   if (h === 'failed') return 'bg-destructive';
   if (store.validation_status === 'valid' || store.validation_status === 'restricted') return 'bg-success';
   if (store.validation_status === 'invalid') return 'bg-destructive';
-  return 'bg-muted-foreground/50';
+  return 'bg-sidebar-muted/50';
 }
 
 export function AppSidebar() {
@@ -110,6 +110,7 @@ export function AppSidebar() {
   };
 
   const userInitials = user?.email?.slice(0, 2).toUpperCase() ?? 'AU';
+  const enabledCount = (stores ?? []).filter(s => s.enabled).length;
 
   const filteredStores = (stores ?? []).filter(s => {
     if (storeFilter === 'all') return true;
@@ -121,8 +122,6 @@ export function AppSidebar() {
     if (storeFilter === 'failed') return h === 'failed' || s.validation_status === 'invalid';
     return true;
   });
-
-  const enabledCount = (stores ?? []).filter(s => s.enabled).length;
 
   async function enableAll() {
     if (!stores) return;
@@ -138,30 +137,32 @@ export function AppSidebar() {
 
   return (
     <div
-      className="flex flex-col h-full w-[220px] shrink-0"
+      className="flex flex-col h-full w-[216px] shrink-0"
       style={{ background: 'hsl(var(--sidebar-background))' }}
     >
       {/* ── Logo ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-3 px-4 py-4 border-b border-sidebar-border">
+      <div className="flex items-center gap-2.5 px-4 py-4 border-b" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
         <div
-          className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: 'hsl(252 82% 65% / 0.18)' }}
+          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
+          style={{ background: 'hsl(220 80% 66% / 0.15)' }}
         >
-          <Pill className="w-4 h-4" style={{ color: 'hsl(252 82% 70%)' }} />
+          <Pill className="w-3.5 h-3.5" style={{ color: 'hsl(220 80% 70%)' }} />
         </div>
         <div className="min-w-0">
           <p className="text-[13px] font-bold leading-none" style={{ color: 'hsl(var(--sidebar-accent-foreground))' }}>
             Pharmacy Scout
           </p>
-          <p className="text-[10px] mt-0.5 truncate text-sidebar-muted">AU Data Platform</p>
+          <p className="text-[10px] mt-0.5 truncate" style={{ color: 'hsl(var(--sidebar-muted))' }}>
+            AU Data Platform
+          </p>
         </div>
       </div>
 
       {/* ── Navigation ───────────────────────────────────────────── */}
-      <nav className="px-3 py-3 space-y-4 flex-shrink-0">
+      <nav className="px-2.5 py-3 space-y-4 flex-shrink-0">
         {NAV_SECTIONS.map(section => (
           <div key={section.label}>
-            <p className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1 text-sidebar-muted">
+            <p className="text-[9.5px] font-semibold uppercase tracking-widest px-3 mb-1.5" style={{ color: 'hsl(var(--sidebar-muted))' }}>
               {section.label}
             </p>
             <div className="space-y-0.5">
@@ -174,38 +175,35 @@ export function AppSidebar() {
       </nav>
 
       {/* ── Store Library header ──────────────────────────────────── */}
-      <div className="flex-shrink-0 px-3 pt-2 border-t border-sidebar-border">
-        <div className="flex items-center justify-between px-3 py-1.5">
+      <div className="flex-shrink-0 px-2.5 pt-1 border-t" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
+        <div className="flex items-center justify-between px-3 py-2">
           <button
             onClick={() => setStoresExpanded(v => !v)}
-            className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-widest transition-colors hover:text-sidebar-accent-foreground"
+            className="flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-widest transition-colors hover:text-sidebar-accent-foreground"
             style={{ color: 'hsl(var(--sidebar-muted))' }}
           >
             <Store className="w-3 h-3" />
             <span>Stores {stores?.length ? `(${enabledCount}/${stores.length})` : ''}</span>
             {storesExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
           </button>
-          {/* Bulk actions dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button
-                className="p-0.5 rounded hover:bg-sidebar-accent/40 transition-colors"
+                className="p-1 rounded-lg transition-colors"
                 style={{ color: 'hsl(var(--sidebar-muted))' }}
               >
                 <Filter className="w-3 h-3" />
               </button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="text-[12px]">
-              <DropdownMenuItem onClick={() => setStoreFilter('all')} className={storeFilter === 'all' ? 'bg-accent' : ''}>
-                All stores
-              </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStoreFilter('enabled')} className={storeFilter === 'enabled' ? 'bg-accent' : ''}>
+              <DropdownMenuItem onClick={() => setStoreFilter('all')} className={storeFilter === 'all' ? 'bg-accent/50' : ''}>All stores</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setStoreFilter('enabled')} className={storeFilter === 'enabled' ? 'bg-accent/50' : ''}>
                 <div className="w-1.5 h-1.5 rounded-full bg-success mr-2" /> Enabled only
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStoreFilter('disabled')} className={storeFilter === 'disabled' ? 'bg-accent' : ''}>
+              <DropdownMenuItem onClick={() => setStoreFilter('disabled')} className={storeFilter === 'disabled' ? 'bg-accent/50' : ''}>
                 <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground/50 mr-2" /> Disabled only
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => setStoreFilter('failed')} className={storeFilter === 'failed' ? 'bg-accent' : ''}>
+              <DropdownMenuItem onClick={() => setStoreFilter('failed')} className={storeFilter === 'failed' ? 'bg-accent/50' : ''}>
                 <div className="w-1.5 h-1.5 rounded-full bg-destructive mr-2" /> Failed
               </DropdownMenuItem>
               <DropdownMenuSeparator />
@@ -221,26 +219,26 @@ export function AppSidebar() {
       </div>
 
       {storesExpanded && (
-        <ScrollArea className="flex-1 px-3 pb-1">
+        <ScrollArea className="flex-1 px-2.5 pb-1">
           {isLoading && (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: 'hsl(var(--sidebar-muted))' }} />
             </div>
           )}
           {!isLoading && (!stores || stores.length === 0) && (
-            <p className="text-[11px] px-3 py-2 text-sidebar-muted">No stores yet.</p>
+            <p className="text-[11px] px-3 py-2" style={{ color: 'hsl(var(--sidebar-muted))' }}>No stores yet.</p>
           )}
           <div className="space-y-0.5 py-1">
             {filteredStores.map(store => (
-              <div key={store.id} className="group flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-sidebar-accent/60 transition-colors">
-                {/* Health dot */}
+              <div key={store.id} className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors" style={{ ':hover': { background: 'hsl(var(--sidebar-accent))' } }}
+                onMouseEnter={e => (e.currentTarget.style.background = 'hsl(var(--sidebar-accent)/50%)')}
+                onMouseLeave={e => (e.currentTarget.style.background = '')}
+              >
                 <div className={cn('w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', storeHealthDot(store))} />
-
-                {/* Store info link */}
                 <RouterNavLink to={`/stores/${store.id}`} className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 min-w-0">
+                  <div className="flex items-center gap-1 min-w-0">
                     <span
-                      className={cn('text-[12px] truncate leading-none', !store.enabled && 'opacity-50')}
+                      className={cn('text-[11.5px] truncate leading-none', !store.enabled && 'opacity-40')}
                       style={{ color: 'hsl(var(--sidebar-foreground))' }}
                     >
                       {store.name}
@@ -264,33 +262,31 @@ export function AppSidebar() {
                     )}
                   </div>
                   {store.total_products > 0 && (
-                    <p className="text-[10px] ml-0 mt-0.5 text-sidebar-muted">
+                    <p className="text-[10px] mt-0.5" style={{ color: 'hsl(var(--sidebar-muted))' }}>
                       {store.total_products.toLocaleString()} products
                     </p>
                   )}
                 </RouterNavLink>
 
-                {/* Enable/disable toggle — always visible */}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="shrink-0">
                       <Switch
                         checked={store.enabled}
                         onCheckedChange={(checked) => updateStore.mutate({ id: store.id, enabled: checked })}
-                        className="scale-75 data-[state=checked]:bg-sidebar-primary"
+                        className="scale-[0.7] data-[state=checked]:bg-sidebar-primary"
                       />
                     </div>
                   </TooltipTrigger>
                   <TooltipContent side="right" className="text-xs">
-                    {store.enabled ? 'Enabled — click to disable' : 'Disabled — click to enable'}
+                    {store.enabled ? 'Enabled' : 'Disabled'}
                   </TooltipContent>
                 </Tooltip>
 
-                {/* Delete — hover only */}
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <button className="p-0.5 text-sidebar-muted hover:text-destructive transition-colors opacity-0 group-hover:opacity-100 shrink-0">
-                      <Trash2 className="w-3.5 h-3.5" />
+                    <button className="p-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0" style={{ color: 'hsl(var(--sidebar-muted))' }}>
+                      <Trash2 className="w-3 h-3" />
                     </button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -311,19 +307,20 @@ export function AppSidebar() {
               </div>
             ))}
             {filteredStores.length === 0 && !isLoading && (
-              <p className="text-[11px] px-3 py-2 text-sidebar-muted">No stores match filter.</p>
+              <p className="text-[11px] px-3 py-2" style={{ color: 'hsl(var(--sidebar-muted))' }}>No stores match filter.</p>
             )}
           </div>
           <div className="h-2" />
         </ScrollArea>
       )}
 
-      {/* ── Footer actions ────────────────────────────────────────── */}
-      <div className="px-3 py-3 border-t border-sidebar-border space-y-1 flex-shrink-0">
+      {/* ── Footer ───────────────────────────────────────────────── */}
+      <div className="px-2.5 py-3 border-t flex-shrink-0 space-y-1" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 text-[12px] font-medium h-8 text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+          className="w-full justify-start gap-2 text-[12px] font-medium h-8 hover:bg-sidebar-accent"
+          style={{ color: 'hsl(var(--sidebar-foreground))' }}
           onClick={() => setAddOpen(true)}
         >
           <Plus className="w-3.5 h-3.5" /> Add Store
@@ -331,7 +328,8 @@ export function AppSidebar() {
         <Button
           variant="ghost"
           size="sm"
-          className="w-full justify-start gap-2 text-[12px] h-8 text-sidebar-muted hover:bg-sidebar-accent/60 hover:text-sidebar-foreground"
+          className="w-full justify-start gap-2 text-[12px] h-8 hover:bg-sidebar-accent/60"
+          style={{ color: 'hsl(var(--sidebar-muted))' }}
           onClick={() => seedStores.mutate()}
           disabled={seedStores.isPending}
         >
@@ -339,18 +337,18 @@ export function AppSidebar() {
           Seed starter library
         </Button>
 
-        {/* User row */}
-        <div className="flex items-center gap-2 px-1 pt-2 border-t border-sidebar-border mt-1">
+        <div className="flex items-center gap-2 px-1 pt-2 border-t mt-1" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
           <div
             className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0"
-            style={{ background: 'hsl(252 82% 65% / 0.2)', color: 'hsl(252 82% 70%)' }}
+            style={{ background: 'hsl(220 80% 66% / 0.18)', color: 'hsl(220 80% 72%)' }}
           >
             {userInitials}
           </div>
-          <p className="text-[11px] text-sidebar-muted truncate flex-1">{user?.email}</p>
+          <p className="text-[11px] truncate flex-1" style={{ color: 'hsl(var(--sidebar-muted))' }}>{user?.email}</p>
           <button
             onClick={signOut}
-            className="p-1 rounded text-sidebar-muted hover:text-destructive transition-colors"
+            className="p-1 rounded-lg transition-colors hover:text-destructive"
+            style={{ color: 'hsl(var(--sidebar-muted))' }}
             title="Sign out"
           >
             <LogOut className="w-3.5 h-3.5" />
