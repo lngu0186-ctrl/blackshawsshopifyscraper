@@ -242,18 +242,20 @@ export default function Diagnostics() {
           )}
 
           {!isEmpty && (
-            <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
               {[
-                { label: 'Urgent Stores', value: riskCounts.urgent, icon: XCircle, color: 'text-destructive' },
-                { label: 'At-Risk Stores', value: riskCounts.warning, icon: AlertTriangle, color: 'text-warning' },
-                { label: 'Healthy Stores', value: riskCounts.healthy, icon: CheckCircle2, color: 'text-success' },
-                { label: 'Critical Errors', value: summary?.criticalErrors ?? 0, icon: ShieldAlert, color: 'text-destructive' },
-                { label: 'Warnings', value: summary?.warnings ?? 0, icon: BarChart3, color: 'text-warning' },
-              ].map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className="bg-card rounded-2xl border border-border p-4 shadow-card">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon className={cn('w-4 h-4', color)} />
-                    <p className="text-[11px] text-muted-foreground">{label}</p>
+                { label: 'Urgent Stores', value: riskCounts.urgent, icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/8' },
+                { label: 'At-Risk Stores', value: riskCounts.warning, icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/8' },
+                { label: 'Healthy Stores', value: riskCounts.healthy, icon: CheckCircle2, color: 'text-success', bg: 'bg-success/8' },
+                { label: 'Critical Errors', value: summary?.criticalErrors ?? 0, icon: ShieldAlert, color: 'text-destructive', bg: 'bg-destructive/8' },
+                { label: 'Warnings', value: summary?.warnings ?? 0, icon: BarChart3, color: 'text-warning', bg: 'bg-warning/8' },
+              ].map(({ label, value, icon: Icon, color, bg }) => (
+                <div key={label} className="bg-white rounded-2xl border border-border p-4 shadow-card">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${bg}`}>
+                      <Icon className={cn('w-3.5 h-3.5', color)} />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
                   </div>
                   {summaryLoading || diagnosticsLoading ? (
                     <Skeleton className="h-7 w-16" />
