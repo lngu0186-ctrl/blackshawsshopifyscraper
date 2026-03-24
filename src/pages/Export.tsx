@@ -412,13 +412,13 @@ export default function Export() {
 
         {/* ── Legacy store-based exports ── */}
         <TabsContent value="legacy" className="space-y-4 mt-4">
-          <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-card">
-            <h2 className="text-sm font-semibold">Store-based Exports (existing stores)</h2>
+          <div className="bg-white rounded-2xl border border-border shadow-card p-5 space-y-4">
+            <h2 className="text-[13.5px] font-bold text-foreground">Store-based Exports</h2>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Scope</Label>
+              <Label className="text-[12px]">Scope</Label>
               <Select value={scope} onValueChange={(v: any) => setScope(v)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 rounded-xl text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All stores</SelectItem>
                   <SelectItem value="selected">Selected stores</SelectItem>
@@ -428,7 +428,7 @@ export default function Export() {
 
             {scope === 'selected' && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Select stores</Label>
+                <Label className="text-[12px]">Select stores</Label>
                 <div className="space-y-1.5">
                   {stores?.map(s => (
                     <label key={s.id} className="flex items-center gap-2 cursor-pointer">
@@ -436,7 +436,7 @@ export default function Export() {
                         onChange={e => setSelectedStoreIds(prev =>
                           e.target.checked ? [...prev, s.id] : prev.filter(id => id !== s.id)
                         )} />
-                      <span className="text-sm">{s.name}</span>
+                      <span className="text-[12px]">{s.name}</span>
                     </label>
                   ))}
                 </div>
@@ -445,47 +445,28 @@ export default function Export() {
 
             <div className="flex items-center gap-3">
               <Switch id="changedOnly" checked={changedOnly} onCheckedChange={setChangedOnly} />
-              <Label htmlFor="changedOnly" className="text-sm cursor-pointer">Changed only (since last export)</Label>
+              <Label htmlFor="changedOnly" className="text-[12px] cursor-pointer">Changed only (since last export)</Label>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button className="h-12 justify-start gap-3 bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => exportShopifyCsv.mutate({ storeIds, changedOnly })}
-              disabled={exportShopifyCsv.isPending}>
-              {exportShopifyCsv.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export Shopify CSV</p>
-                <p className="text-xs opacity-75">Importable product feed</p>
-              </div>
-            </Button>
-            <Button variant="outline" className="h-12 justify-start gap-3"
-              onClick={() => exportJson.mutate({ storeIds, changedOnly })}
-              disabled={exportJson.isPending}>
-              {exportJson.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export JSON</p>
-                <p className="text-xs text-muted-foreground">Raw product data</p>
-              </div>
-            </Button>
-            <Button variant="outline" className="h-12 justify-start gap-3"
-              onClick={() => exportExcel.mutate({ storeIds, changedOnly })}
-              disabled={exportExcel.isPending}>
-              {exportExcel.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export Excel (.xlsx)</p>
-                <p className="text-xs text-muted-foreground">Shopify columns preserved</p>
-              </div>
-            </Button>
-            <Button variant="outline" className="h-12 justify-start gap-3"
-              onClick={() => exportPriceHistoryCsv.mutate({ storeIds })}
-              disabled={exportPriceHistoryCsv.isPending}>
-              {exportPriceHistoryCsv.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <History className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export Price History CSV</p>
-                <p className="text-xs text-muted-foreground">All price change events</p>
-              </div>
-            </Button>
+            {[
+              { label: 'Export Shopify CSV', sub: 'Importable product feed', icon: Download, isPrimary: true, action: () => exportShopifyCsv.mutate({ storeIds, changedOnly }), pending: exportShopifyCsv.isPending },
+              { label: 'Export JSON', sub: 'Raw product data', icon: FileText, isPrimary: false, action: () => exportJson.mutate({ storeIds, changedOnly }), pending: exportJson.isPending },
+              { label: 'Export Excel (.xlsx)', sub: 'Shopify columns preserved', icon: FileSpreadsheet, isPrimary: false, action: () => exportExcel.mutate({ storeIds, changedOnly }), pending: exportExcel.isPending },
+              { label: 'Export Price History CSV', sub: 'All price change events', icon: History, isPrimary: false, action: () => exportPriceHistoryCsv.mutate({ storeIds }), pending: exportPriceHistoryCsv.isPending },
+            ].map(({ label, sub, icon: Icon, isPrimary, action, pending }) => (
+              <Button key={label}
+                className={`h-12 justify-start gap-3 rounded-xl ${isPrimary ? 'bg-foreground hover:bg-foreground/90 text-background' : ''}`}
+                variant={isPrimary ? 'default' : 'outline'}
+                onClick={action} disabled={pending}>
+                {pending ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Icon className="w-4 h-4 flex-shrink-0" />}
+                <div className="text-left">
+                  <p className="text-[13px] font-semibold">{label}</p>
+                  <p className={`text-[11px] ${isPrimary ? 'opacity-70' : 'text-muted-foreground'}`}>{sub}</p>
+                </div>
+              </Button>
+            ))}
           </div>
         </TabsContent>
       </Tabs>
