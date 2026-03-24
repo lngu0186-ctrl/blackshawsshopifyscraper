@@ -22,6 +22,25 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4i best-known retry mode per store
+
+### Delivered
+- Added a derived **best-known mode** per store based on recent retry history outcomes
+- Best-known mode scoring now favors:
+  - beat-baseline attempts
+  - helped attempts
+  - completed attempts with stronger page/product deltas
+- Surfaced the best-known mode on Store Detail above the retry history list
+- This gives operators a quick recommendation for which retry mode appears to work best for a store right now
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Best-known mode is still heuristic and based on recent observed runs, not a persisted or manually curated operator setting
+- The scoring currently uses recent retry history only; it does not yet separate store classes or seasonal behavior patterns
+- Best-known mode is surfaced on Store Detail only, not yet rolled into Diagnostics or bulk triage views
+
 ## 2026-03-24 — Phase 4h retry history vs previous baseline
 
 ### Delivered

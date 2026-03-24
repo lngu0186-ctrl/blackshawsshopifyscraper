@@ -49,7 +49,7 @@ export function useStoreRetryHistory(storeId?: string | null) {
         };
       });
 
-      return rows.map((entry, index) => {
+      const enriched = rows.map((entry, index) => {
         const baseline = rows[index + 1] ?? null;
         const deltaProducts = baseline ? entry.productCount - baseline.productCount : null;
         const deltaPages = baseline ? entry.pageCount - baseline.pageCount : null;
@@ -71,6 +71,31 @@ export function useStoreRetryHistory(storeId?: string | null) {
           helped: beatBaseline || (entry.status === 'completed' && (entry.productCount > 0 || entry.pageCount > 0)),
         };
       });
+
+      const modeScores = new Map<string, { score: number; label: string; count: number }>();
+      for (const entry of enriched) {
+        const current = modeScores.get(entry.retryMode) ?? { score: 0, label: entry.modeLabel, count: 0 };
+        current.count += 1;
+        if (entry.beatBaseline) current.score += 3;
+        else if (entry.helped) current.score += 2;
+        else if (entry.status === 'completed') current.score += 1;
+        if ((entry.deltaProducts ?? 0) > 0) current.score += 1;
+        if ((entry.deltaPages ?? 0) > 0) current.score += 1;
+        modeScores.set(entry.retryMode, current);
+      }
+
+      const bestKnownMode = [...modeScores.entries()]
+        .sort((a, b) => b[1].score - a[1].score || b[1].count - a[1].count)[0];
+
+      return {
+        entries: enriched,
+        bestKnownMode: bestKnownMode ? {
+          mode: bestKnownMode[0],
+          label: bestKnownMode[1].label,
+          score: bestKnownMode[1].score,
+          count: bestKnownMode[1].count,
+        } : null,
+      };
     },
   });
 }

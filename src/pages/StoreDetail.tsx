@@ -78,7 +78,9 @@ export default function StoreDetail() {
   const { data: health, isLoading: healthLoading } = useStoreHealth(id, store);
   const { data: diagnosticsMap } = useStoreDiagnostics(store ? [store] : undefined);
   const diagnostic = store ? diagnosticsMap?.[store.id] : undefined;
-  const { data: retryHistory } = useStoreRetryHistory(id ?? null);
+  const { data: retryHistoryData } = useStoreRetryHistory(id ?? null);
+  const retryHistory = retryHistoryData?.entries;
+  const bestKnownMode = retryHistoryData?.bestKnownMode;
   const revalidateStores = useRevalidateStores();
   const scrapeStores = useScrapeStores();
 
@@ -232,6 +234,11 @@ export default function StoreDetail() {
               <h2 className="text-[13px] font-bold text-foreground">Retry History</h2>
               <p className="text-[11px] text-muted-foreground mt-0.5">See whether smaller-batch or slow-pacing retries improved outcomes for this store.</p>
             </div>
+            {bestKnownMode && (
+              <Badge variant="outline" className="text-[10px]">
+                Best known mode: {bestKnownMode.label}
+              </Badge>
+            )}
           </div>
           <div className="space-y-2">
             {retryHistory.map((entry: any) => (
