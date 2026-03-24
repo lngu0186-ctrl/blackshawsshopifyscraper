@@ -334,18 +334,25 @@ export default function Export() {
   }
 
   return (
-    <div className="p-6 max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Export</h1>
-        <p className="text-sm text-muted-foreground mt-1">Scrape supported AU pharmacy sites, enrich products, and export clean data</p>
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+
+      {/* ── Top Bar ───────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-border bg-white flex-shrink-0">
+        <div>
+          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Export</h1>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5">Scrape, enrich, and export clean Shopify-ready data</p>
+        </div>
       </div>
 
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 max-w-5xl">
+
       <Tabs defaultValue="export">
-        <TabsList className="h-8">
-          <TabsTrigger value="export" className="text-xs h-7">Export</TabsTrigger>
-          <TabsTrigger value="review" className="text-xs h-7">Product Review</TabsTrigger>
-          <TabsTrigger value="sources" className="text-xs h-7">Sources</TabsTrigger>
-          <TabsTrigger value="legacy" className="text-xs h-7">Store Exports</TabsTrigger>
+        <TabsList className="h-9 bg-muted/60 rounded-xl p-1">
+          <TabsTrigger value="export" className="text-[12px] h-7 rounded-lg">Export</TabsTrigger>
+          <TabsTrigger value="review" className="text-[12px] h-7 rounded-lg">Product Review</TabsTrigger>
+          <TabsTrigger value="sources" className="text-[12px] h-7 rounded-lg">Sources</TabsTrigger>
+          <TabsTrigger value="legacy" className="text-[12px] h-7 rounded-lg">Store Exports</TabsTrigger>
         </TabsList>
 
         {/* ── Export Panel ── */}
