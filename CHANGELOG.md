@@ -22,6 +22,33 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 1i runbook actions in Stores + Store Detail
+
+### Delivered
+- Added new `useStoreActions` hook for operational store actions:
+  - revalidate selected stores against `validate-store`
+  - create targeted scrape runs for selected stores
+  - run single-store or multi-store scrape actions from the UI
+- Upgraded `/stores` into a runbook-friendly control surface:
+  - select-all / clear-selection
+  - per-store checkbox selection
+  - bulk **Revalidate selected**
+  - bulk **Scrape selected**
+  - per-store action buttons for revalidate, scrape, and diagnostics drill-down
+- Upgraded `StoreDetail` with direct operational actions:
+  - **Revalidate store**
+  - **Scrape now**
+  - **Open diagnostics**
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Bulk scrape currently executes selected stores sequentially within one targeted run rather than via a richer job orchestration UI
+- These actions depend on the currently deployed Supabase edge functions; if hosted functions lag repo code, runtime behavior may still reflect that
+- The runbook markdown exists separately; this phase makes the UI actionable but does not yet write outcomes back into the runbook automatically
+
 ## 2026-03-24 — Phase 1h audit truthfulness + legacy URL hardening
 
 ### Delivered

@@ -1,7 +1,9 @@
+import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, ExternalLink, Lock, ShieldAlert, Store as StoreIcon, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ExternalLink, Lock, RefreshCcw, ShieldAlert, Store as StoreIcon, XCircle } from 'lucide-react';
 import { useStores } from '@/hooks/useStores';
 import { useStoreDiagnostics } from '@/hooks/useStoreDiagnostics';
+import { useRevalidateStores, useScrapeStores } from '@/hooks/useStoreActions';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -42,6 +44,23 @@ function DiagnosticIcon({ status }: { status?: string }) {
 export default function Stores() {
   const { data: stores, isLoading } = useStores();
   const { data: diagnostics, isLoading: diagnosticsLoading } = useStoreDiagnostics(stores);
+  const revalidateStores = useRevalidateStores();
+  const scrapeStores = useScrapeStores();
+  const [selected, setSelected] = useState<string[]>([]);
+
+  const selectedStores = useMemo(
+    () => (stores ?? []).filter(store => selected.includes(store.id)),
+    [stores, selected]
+  );
+
+  const toggleSelected = (storeId: string) => {
+    setSelected(current => current.includes(storeId) ? current.filter(id => id !== storeId) : [...current, storeId]);
+  };
+
+  const toggleSelectAll = () => {
+    if (!stores?.length) return;
+    setSelected(current => current.length === stores.length ? [] : stores.map(store => store.id));
+  };
 
   return (
     <div className="p-6 space-y-6 max-w-7xl">
@@ -52,9 +71,30 @@ export default function Stores() {
             Source stores, truthful scrape diagnostics, auth blockers, and current product counts.
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/diagnostics">Open diagnostics</Link>
-        </Button>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Button variant="outline" size="sm" onClick={toggleSelectAll} disabled={isLoading || !(stores?.length)}>
+            {selected.length === (stores?.length ?? 0) && selected.length > 0 ? 'Clear selection' : 'Select all'}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => revalidateStores.mutate(selectedStores)}
+            disabled={!selectedStores.length || revalidateStores.isPending}
+          >
+            <RefreshCcw className="w-3.5 h-3.5 mr-1.5" />
+            Revalidate selected
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => scrapeStores.mutate(selectedStores.map(store => store.id))}
+            disabled={!selectedStores.length || scrapeStores.isPending}
+          >
+            Scrape selected
+          </Button>
+          <Button asChild variant="outline" size="sm">
+            <Link to="/diagnostics">Open diagnostics</Link>
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -75,20 +115,30 @@ export default function Stores() {
           const diagnostic = diagnostics?.[store.id];
 
           return (
-            <Link
+            <div
               key={store.id}
-              to={`/stores/${store.id}`}
               className="rounded-xl border border-border bg-card p-4 hover:border-primary/40 hover:bg-muted/20 transition-colors"
             >
               <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <StoreIcon className="w-4 h-4 text-muted-foreground shrink-0" />
-                    <h2 className="font-semibold truncate">{store.name}</h2>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1 truncate">{store.normalized_url}</p>
+                <div className="flex items-start gap-3 min-w-0">
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(store.id)}
+                    onChange={() => toggleSelected(store.id)}
+                    className="mt-1"
+                    aria-label={`Select ${store.name}`}
+                  />
+                  <Link to={`/stores/${store.id}`} className="min-w-0 block">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <StoreIcon className="w-4 h-4 text-muted-foreground shrink-0" />
+                      <h2 className="font-semibold truncate">{store.name}</h2>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1 truncate">{store.normalized_url}</p>
+                  </Link>
                 </div>
-                <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
+                <Link to={`/stores/${store.id}`}>
+                  <ExternalLink className="w-4 h-4 text-muted-foreground shrink-0" />
+                </Link>
               </div>
 
               <div className="mt-4 flex flex-wrap gap-2">
@@ -113,6 +163,27 @@ export default function Stores() {
                 )}
               </div>
 
+              <div className="mt-4 flex items-center gap-2 flex-wrap">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => revalidateStores.mutate([store])}
+                  disabled={revalidateStores.isPending}
+                >
+                  Revalidate
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => scrapeStores.mutate([store.id])}
+                  disabled={scrapeStores.isPending}
+                >
+                  Scrape now
+                </Button>
+                <Button asChild variant="ghost" size="sm">
+                  <Link to={`/diagnostics?store=${store.id}`}>Diagnostics</Link>
+                </Button>
+              </div>
+
               <div className="mt-4 text-xs text-muted-foreground space-y-1">
                 <p>Auth status: <span className="text-foreground">{store.auth_status}</span></p>
                 <p>
@@ -133,7 +204,7 @@ export default function Stores() {
                   </>
                 )}
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>

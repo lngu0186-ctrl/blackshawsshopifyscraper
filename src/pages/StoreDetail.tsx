@@ -1,8 +1,9 @@
 /**
  * StoreDetail page — Block 6: Store health panel with operational metrics.
  */
-import { useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useStores, useUpdateStore } from '@/hooks/useStores';
+import { useRevalidateStores, useScrapeStores } from '@/hooks/useStoreActions';
 import { useStoreMetricsHistory } from '@/hooks/usePriceHistory';
 import { useProducts } from '@/hooks/useProducts';
 import { useStoreHealth } from '@/hooks/useStoreHealth';
@@ -16,6 +17,7 @@ import { formatPrice } from '@/lib/url';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 
@@ -72,6 +74,8 @@ export default function StoreDetail() {
   const { data: metrics } = useStoreMetricsHistory(id ?? null);
   const { data: _productsData } = useProducts({ page: 1, pageSize: 5, storeId: id, sortBy: 'scraped_at', sortDir: 'desc' });
   const { data: health, isLoading: healthLoading } = useStoreHealth(id, store);
+  const revalidateStores = useRevalidateStores();
+  const scrapeStores = useScrapeStores();
 
   if (!store) return (
     <div className="flex items-center justify-center h-64">
@@ -122,6 +126,27 @@ export default function StoreDetail() {
             disabled={updateStore.isPending}
           />
         </div>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => revalidateStores.mutate([store])}
+          disabled={revalidateStores.isPending}
+        >
+          Revalidate store
+        </Button>
+        <Button
+          size="sm"
+          onClick={() => scrapeStores.mutate([store.id])}
+          disabled={scrapeStores.isPending}
+        >
+          Scrape now
+        </Button>
+        <Button asChild variant="ghost" size="sm">
+          <Link to={`/diagnostics?store=${store.id}`}>Open diagnostics</Link>
+        </Button>
       </div>
 
       {/* ── Store Health Panel ─────────────────────────────────────────────────── */}
