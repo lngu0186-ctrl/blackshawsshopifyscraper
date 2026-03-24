@@ -22,6 +22,7 @@ export interface StoreDiagnosticSummary {
   status: StoreDiagnosticStatus;
   label: string;
   reason: string;
+  recommendedAction: string;
   failuresLast7Days: number;
   warningsLast7Days: number;
   parentTimeoutsLast7Days: number;
@@ -41,7 +42,7 @@ function daysSince(iso?: string | null) {
   return ms / (1000 * 60 * 60 * 24);
 }
 
-function deriveStatus(store: Store, extra: Omit<StoreDiagnosticSummary, 'storeId' | 'status' | 'label' | 'reason' | 'products'>): Pick<StoreDiagnosticSummary, 'status' | 'label' | 'reason'> {
+function deriveStatus(store: Store, extra: Omit<StoreDiagnosticSummary, 'storeId' | 'status' | 'label' | 'reason' | 'recommendedAction' | 'products'>): Pick<StoreDiagnosticSummary, 'status' | 'label' | 'reason' | 'recommendedAction'> {
   const validationStatus = store.validation_status;
   const authStatus = (store as any).auth_status ?? 'none';
   const antibotSuspected = Boolean((store as any).antibot_suspected);
@@ -54,54 +55,54 @@ function deriveStatus(store: Store, extra: Omit<StoreDiagnosticSummary, 'storeId
   const hasRecentBlockSignals = antibotSuspected || validationStatus === 'restricted' || latestError.includes('blocked') || latestError.includes('access restriction');
 
   if (!store.enabled) {
-    return { status: 'disabled', label: 'Disabled', reason: 'Store is turned off' };
+    return { status: 'disabled', label: 'Disabled', reason: 'Store is turned off', recommendedAction: 'No action — store disabled' };
   }
 
   if (validationStatus === 'invalid') {
-    return { status: 'invalid', label: 'Invalid', reason: 'Validation failed' };
+    return { status: 'invalid', label: 'Invalid', reason: 'Validation failed', recommendedAction: 'Revalidate URL / qualification before scraping again' };
   }
 
   if (store.requires_auth && authStatus !== 'authenticated') {
-    return { status: 'auth_required', label: 'Auth required', reason: 'Needs working authentication before scraping' };
+    return { status: 'auth_required', label: 'Auth required', reason: 'Needs working authentication before scraping', recommendedAction: 'Refresh auth session, then re-run store scrape' };
   }
 
   if (hasRecentSuccess && productCount > 0 && !hasRetryableHttp) {
-    return { status: 'productive', label: 'Productive', reason: 'Recent successful scrape produced usable products' };
+    return { status: 'productive', label: 'Productive', reason: 'Recent successful scrape produced usable products', recommendedAction: 'Monitor only — no immediate action needed' };
   }
 
   if (hasRecentBlockSignals && !hasRecentSuccess) {
-    return { status: 'blocked', label: 'Blocked', reason: 'Anti-bot, access restriction, or blocking suspected' };
+    return { status: 'blocked', label: 'Blocked', reason: 'Anti-bot, access restriction, or blocking suspected', recommendedAction: 'Inspect blocking/auth/WAF behavior and try slower strategy or auth-backed scrape' };
   }
 
   if (hasTimeoutFallout && !hasRecentSuccess) {
-    return { status: 'timeout_fallout', label: 'Run timeout', reason: extra.latestErrorMessage ?? 'Parent run timeout polluted this store status' };
+    return { status: 'timeout_fallout', label: 'Run timeout', reason: extra.latestErrorMessage ?? 'Parent run timeout polluted this store status', recommendedAction: 'Re-run in a smaller batch and check parent run timeout settings' };
   }
 
   if (hasRetryableHttp && !hasRecentSuccess) {
-    return { status: 'retryable_http_error', label: 'Retryable HTTP error', reason: extra.latestErrorMessage ?? 'Temporary HTTP failure such as 503/429' };
+    return { status: 'retryable_http_error', label: 'Retryable HTTP error', reason: extra.latestErrorMessage ?? 'Temporary HTTP failure such as 503/429', recommendedAction: 'Retry with backoff / slower pacing before treating as blocked' };
   }
 
   if (!store.last_scraped_at) {
-    return { status: 'never_scraped', label: 'Never scraped', reason: 'No scrape has completed yet' };
+    return { status: 'never_scraped', label: 'Never scraped', reason: 'No scrape has completed yet', recommendedAction: 'Revalidate and run an isolated store scrape' };
   }
 
   if (extra.latestRunStatus === 'error' || (extra.failuresLast7Days >= 3 && !hasTimeoutFallout)) {
-    return { status: 'failing', label: 'Failing', reason: extra.latestErrorMessage ?? 'Recent scrape errors need attention' };
+    return { status: 'failing', label: 'Failing', reason: extra.latestErrorMessage ?? 'Recent scrape errors need attention', recommendedAction: 'Open diagnostics evidence and fix scraper strategy / failure cause before retrying' };
   }
 
   if (productCount === 0) {
-    return { status: 'zero_products', label: 'Zero products', reason: 'Scrapes ran but no usable products were captured' };
+    return { status: 'zero_products', label: 'Zero products', reason: 'Scrapes ran but no usable products were captured', recommendedAction: 'Inspect collection/product discovery and run a focused re-scrape' };
   }
 
   if (scrapedDaysAgo > 14) {
-    return { status: 'stale', label: 'Stale', reason: 'No recent successful scrape in the last 14 days' };
+    return { status: 'stale', label: 'Stale', reason: 'No recent successful scrape in the last 14 days', recommendedAction: 'Run a fresh scrape and compare against previous successful output' };
   }
 
   if (productCount > 0 && extra.failuresLast7Days <= 1) {
-    return { status: 'productive', label: 'Productive', reason: 'Recent scrape activity is producing products' };
+    return { status: 'productive', label: 'Productive', reason: 'Recent scrape activity is producing products', recommendedAction: 'Monitor only — no immediate action needed' };
   }
 
-  return { status: 'unknown', label: 'Unknown', reason: 'Not enough signals yet' };
+  return { status: 'unknown', label: 'Unknown', reason: 'Not enough signals yet', recommendedAction: 'Inspect store detail and diagnostics evidence for next step' };
 }
 
 export function useStoreDiagnostics(stores?: Store[]) {

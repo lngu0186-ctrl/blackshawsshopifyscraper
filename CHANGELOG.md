@@ -22,6 +22,27 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4d diagnostics recommended actions
+
+### Delivered
+- Added explicit **recommended action** output to store diagnostics summaries
+- Recommended actions are now derived from the classifier and surfaced directly in the Diagnostics risk table
+- This gives each store a clearer operational next step such as:
+  - re-run in smaller batch
+  - retry with backoff
+  - revalidate URL
+  - refresh auth
+  - inspect blocking/WAF behavior
+  - monitor only
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Recommended actions are currently heuristic/classifier-driven, not yet personalized from richer store history or manual operator notes
+- The action text is visible in Diagnostics, but not yet surfaced in Store Detail or as one-click workflow shortcuts
+- Hosted behavior will still improve further after new structured event signals are deployed and fresh runs populate them
+
 ## 2026-03-24 — Phase 4c diagnostics reason badges + retry counters
 
 ### Delivered
