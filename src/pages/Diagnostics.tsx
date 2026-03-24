@@ -4,6 +4,7 @@ import { useStores } from '@/hooks/useStores';
 import { useAnalyzeFailure } from '@/hooks/useDiagnostics';
 import { useScraperEvents, useScraperEventsSummary, useScraperEventStages } from '@/hooks/useScraperEvents';
 import { useStoreDiagnostics } from '@/hooks/useStoreDiagnostics';
+import { useBestKnownModes } from '@/hooks/useBestKnownModes';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -123,6 +124,7 @@ export default function Diagnostics() {
     if (date && ['24h', '7d', '30d', 'all'].includes(date)) setFilterDate(date as any);
   }, [searchParams]);
   const { data: diagnostics, isLoading: diagnosticsLoading } = useStoreDiagnostics(stores);
+  const { data: bestKnownModes } = useBestKnownModes((stores ?? []).map(s => s.id));
   const { data: summary, isLoading: summaryLoading } = useScraperEventsSummary();
   const { data: stages } = useScraperEventStages();
 
@@ -150,6 +152,7 @@ export default function Diagnostics() {
         label: d?.label ?? 'Unknown',
         reason: d?.reason ?? 'No diagnostic summary yet',
         recommendedAction: d?.recommendedAction ?? 'Inspect diagnostics evidence',
+        bestKnownMode: bestKnownModes?.[store.id]?.label ?? '—',
         failuresLast7Days: d?.failuresLast7Days ?? 0,
         warningsLast7Days: d?.warningsLast7Days ?? 0,
         parentTimeoutsLast7Days: d?.parentTimeoutsLast7Days ?? 0,
@@ -180,7 +183,7 @@ export default function Diagnostics() {
     });
 
     return sorted;
-  }, [stores, diagnostics, riskFilter, sortBy, storeSearch]);
+  }, [stores, diagnostics, bestKnownModes, riskFilter, sortBy, storeSearch]);
 
   const riskCounts = useMemo(() => {
     const rows = Object.values(diagnostics ?? {});
@@ -327,7 +330,7 @@ export default function Diagnostics() {
                 <table className="w-full text-[12px]">
                   <thead>
                     <tr className="border-b border-border bg-muted/30">
-                      {['Risk', 'Store', 'Reason', 'Recommended Action', 'Products', 'Errors 7d', 'Warnings 7d', 'Latest Run', 'Last Success', 'Failure Delta', 'Last Scraped', 'Actions'].map(h => (
+                      {['Risk', 'Store', 'Reason', 'Recommended Action', 'Best Mode', 'Products', 'Errors 7d', 'Warnings 7d', 'Latest Run', 'Last Success', 'Failure Delta', 'Last Scraped', 'Actions'].map(h => (
                         <th key={h} className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">
                           {h}
                         </th>
@@ -337,7 +340,7 @@ export default function Diagnostics() {
                   <tbody>
                     {(storesLoading || diagnosticsLoading) && Array.from({ length: 8 }).map((_, i) => (
                       <tr key={i} className="border-b border-border/50">
-                        {Array.from({ length: 12 }).map((_, j) => (
+                        {Array.from({ length: 13 }).map((_, j) => (
                           <td key={j} className="px-4 py-3"><Skeleton className="h-3 w-full" /></td>
                         ))}
                       </tr>
@@ -345,7 +348,7 @@ export default function Diagnostics() {
 
                     {!storesLoading && !diagnosticsLoading && storeRows.length === 0 && (
                       <tr>
-                        <td colSpan={12} className="px-4 py-12 text-center text-muted-foreground text-[12px]">
+                        <td colSpan={13} className="px-4 py-12 text-center text-muted-foreground text-[12px]">
                           No stores match the current risk filters.
                         </td>
                       </tr>
@@ -393,6 +396,9 @@ export default function Diagnostics() {
                           <span className="inline-flex items-center rounded-full border border-border bg-muted/40 px-2 py-1 text-[10px] text-foreground">
                             {row.recommendedAction}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-[11px] text-muted-foreground">
+                          {row.bestKnownMode}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap font-semibold tabular-nums">{(row.total_products ?? 0).toLocaleString()}</td>
                         <td className="px-4 py-3 whitespace-nowrap">

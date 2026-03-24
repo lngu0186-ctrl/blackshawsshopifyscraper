@@ -22,6 +22,22 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4k best-known mode in Diagnostics + bulk workflows
+
+### Delivered
+- Added `useBestKnownModes` to derive best-known retry modes across multiple stores from recent run history
+- Surfaced **Best Mode** into the Diagnostics risk table
+- Updated bulk scrape workflow on the Stores page to group selected stores by best-known mode and launch the appropriate retry profile per group automatically
+- This extends best-known mode beyond Store Detail and into portfolio-level triage + operational batch actions
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Best-known mode remains heuristic and inferred from recent run history rather than a persisted manual preference
+- Bulk mode grouping currently uses existing retry profiles only (`default`, `smaller_batch`, `slow_pacing`)
+- Diagnostics shows the best-known mode, but does not yet support filtering or sorting by that field specifically
+
 ## 2026-03-24 — Phase 4j follow recommendation uses best-known mode
 
 ### Delivered

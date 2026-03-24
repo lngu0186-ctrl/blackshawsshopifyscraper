@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, ExternalLink, Lock, RefreshCcw, ShieldAlert, Store as StoreIcon, XCircle } from 'lucide-react';
 import { useStores } from '@/hooks/useStores';
 import { useStoreDiagnostics } from '@/hooks/useStoreDiagnostics';
+import { useBestKnownModes } from '@/hooks/useBestKnownModes';
 import { useRevalidateStores, useScrapeStores } from '@/hooks/useStoreActions';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -44,6 +45,7 @@ function DiagnosticIcon({ status }: { status?: string }) {
 export default function Stores() {
   const { data: stores, isLoading } = useStores();
   const { data: diagnostics, isLoading: diagnosticsLoading } = useStoreDiagnostics(stores);
+  const { data: bestKnownModes } = useBestKnownModes((stores ?? []).map(s => s.id));
   const revalidateStores = useRevalidateStores();
   const scrapeStores = useScrapeStores();
   const [selected, setSelected] = useState<string[]>([]);
@@ -86,7 +88,11 @@ export default function Stores() {
           </Button>
           <Button
             size="sm"
-            onClick={() => scrapeStores.mutate({ storeIds: selectedStores.map(store => store.id), modeLabel: 'Bulk scrape' })}
+            onClick={() => scrapeStores.mutate({
+              storeIds: selectedStores.map(store => store.id),
+              modeByStore: Object.fromEntries(selectedStores.map(store => [store.id, bestKnownModes?.[store.id]?.mode ?? 'default'])),
+              modeLabel: 'Best-known mode bulk scrape'
+            })}
             disabled={!selectedStores.length || scrapeStores.isPending}
           >
             Scrape selected

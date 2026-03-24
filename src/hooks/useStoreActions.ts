@@ -124,29 +124,55 @@ export function useScrapeStores() {
   const { user } = useAuth();
 
   return useMutation({
-    mutationFn: async ({ storeIds, overrides, modeLabel }: { storeIds: string[]; overrides?: Partial<Settings>; modeLabel?: string }) => {
+    mutationFn: async ({ storeIds, overrides, modeLabel, modeByStore }: { storeIds: string[]; overrides?: Partial<Settings>; modeLabel?: string; modeByStore?: Record<string, 'slow_pacing' | 'smaller_batch' | 'default'> }) => {
       if (!user) throw new Error('Not authenticated');
       if (!storeIds.length) throw new Error('No stores selected');
-      const { runId, settings } = await createRunForStores(user.id, storeIds, overrides);
-      const results: Array<{ storeId: string; ok: boolean }> = [];
-      for (const storeId of storeIds) {
-        try {
-          await scrapeStore(runId, storeId, settings);
-          results.push({ storeId, ok: true });
-        } catch {
-          results.push({ storeId, ok: false });
+
+      const groups = new Map<string, { storeIds: string[]; overrides?: Partial<Settings>; label: string }>();
+
+      if (modeByStore && Object.keys(modeByStore).length > 0) {
+        for (const storeId of storeIds) {
+          const mode = modeByStore[storeId] || 'default';
+          const groupOverrides = mode === 'slow_pacing'
+            ? { interPageDelay: 2000, maxConcurrentStores: 1 }
+            : mode === 'smaller_batch'
+              ? { maxConcurrentStores: 1 }
+              : undefined;
+          const label = mode === 'slow_pacing' ? 'Slow pacing batch' : mode === 'smaller_batch' ? 'Smaller batch batch' : 'Default batch';
+          const existing = groups.get(mode) ?? { storeIds: [], overrides: groupOverrides, label };
+          existing.storeIds.push(storeId);
+          groups.set(mode, existing);
+        }
+      } else {
+        groups.set('single', { storeIds, overrides, label: modeLabel || 'Scrape run' });
+      }
+
+      const allResults: Array<{ storeId: string; ok: boolean }> = [];
+      const runIds: string[] = [];
+
+      for (const group of groups.values()) {
+        const { runId, settings } = await createRunForStores(user.id, group.storeIds, group.overrides);
+        runIds.push(runId);
+        for (const storeId of group.storeIds) {
+          try {
+            await scrapeStore(runId, storeId, settings);
+            allResults.push({ storeId, ok: true });
+          } catch {
+            allResults.push({ storeId, ok: false });
+          }
         }
       }
-      return { runId, results, modeLabel };
+
+      return { runIds, results: allResults, modeLabel: modeLabel || (groups.size > 1 ? 'Best-known mode batches' : [...groups.values()][0]?.label) };
     },
-    onSuccess: ({ results, runId, modeLabel }) => {
+    onSuccess: ({ results, runIds, modeLabel }) => {
       queryClient.invalidateQueries({ queryKey: ['stores'] });
       queryClient.invalidateQueries({ queryKey: ['store_diagnostics'] });
       queryClient.invalidateQueries({ queryKey: ['scrape_runs'] });
       queryClient.invalidateQueries({ queryKey: ['scraper_events'] });
       const ok = results.filter(r => r.ok).length;
       const failed = results.length - ok;
-      toast.success(`${modeLabel || 'Scrape run'} started (${runId.slice(0, 8)}…) · ${ok} succeeded${failed ? ` · ${failed} failed` : ''}`);
+      toast.success(`${modeLabel || 'Scrape run'} started (${runIds.length} run${runIds.length === 1 ? '' : 's'}) · ${ok} succeeded${failed ? ` · ${failed} failed` : ''}`);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to scrape stores'),
   });
