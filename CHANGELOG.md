@@ -22,6 +22,21 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4j follow recommendation uses best-known mode
+
+### Delivered
+- Updated Store Detail **Follow recommendation** action to prefer the store’s derived best-known retry mode when one exists
+- Best-known mode now automatically influences the default follow-up behavior for stores with retry history, instead of always falling back to a generic focused retry
+- Explicit retry buttons (e.g. slow pacing / smaller batch) remain available as manual overrides
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Best-known mode is still derived heuristically from recent retry outcomes
+- Default follow-recommendation behavior is currently applied on Store Detail only, not yet in Diagnostics or bulk workflows
+- The current override mapping supports the existing retry modes, but not future richer profiles yet
+
 ## 2026-03-24 — Phase 4i best-known retry mode per store
 
 ### Delivered

@@ -101,6 +101,18 @@ export default function StoreDetail() {
   const platform = (store as any).platform ?? 'unknown';
   const storeType = (store as any).store_type ?? 'unknown';
 
+  const bestKnownModeOverrides = bestKnownMode?.mode === 'slow_pacing'
+    ? { interPageDelay: 2000, maxConcurrentStores: 1 }
+    : bestKnownMode?.mode === 'smaller_batch'
+      ? { maxConcurrentStores: 1 }
+      : undefined;
+
+  const bestKnownModeLabel = bestKnownMode?.mode === 'slow_pacing'
+    ? 'Follow recommendation (slow pacing)'
+    : bestKnownMode?.mode === 'smaller_batch'
+      ? 'Follow recommendation (smaller batch)'
+      : 'Focused retry';
+
   return (
     <div className="p-6 space-y-6 max-w-4xl overflow-y-auto h-full">
       {/* Header */}
@@ -179,7 +191,7 @@ export default function StoreDetail() {
             {(diagnostic.status === 'timeout_fallout' || diagnostic.status === 'retryable_http_error' || diagnostic.status === 'stale' || diagnostic.status === 'zero_products' || diagnostic.status === 'failing') && (
               <Button
                 size="sm"
-                onClick={() => scrapeStores.mutate({ storeIds: [store.id], modeLabel: 'Focused retry' })}
+                onClick={() => scrapeStores.mutate({ storeIds: [store.id], modeLabel: bestKnownModeLabel, overrides: bestKnownModeOverrides })}
                 disabled={scrapeStores.isPending}
               >
                 Follow recommendation
