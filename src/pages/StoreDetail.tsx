@@ -8,6 +8,7 @@ import { useStoreMetricsHistory } from '@/hooks/usePriceHistory';
 import { useProducts } from '@/hooks/useProducts';
 import { useStoreHealth } from '@/hooks/useStoreHealth';
 import { useStoreDiagnostics } from '@/hooks/useStoreDiagnostics';
+import { useStoreRetryHistory } from '@/hooks/useStoreRetryHistory';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import {
   Package, TrendingDown, Clock, ExternalLink, Loader2, Power,
@@ -77,6 +78,7 @@ export default function StoreDetail() {
   const { data: health, isLoading: healthLoading } = useStoreHealth(id, store);
   const { data: diagnosticsMap } = useStoreDiagnostics(store ? [store] : undefined);
   const diagnostic = store ? diagnosticsMap?.[store.id] : undefined;
+  const { data: retryHistory } = useStoreRetryHistory(id ?? null);
   const revalidateStores = useRevalidateStores();
   const scrapeStores = useScrapeStores();
 
@@ -219,6 +221,32 @@ export default function StoreDetail() {
                 <Link to={`/diagnostics?store=${store.id}`}>Inspect blocking signals</Link>
               </Button>
             )}
+          </div>
+        </div>
+      )}
+
+      {retryHistory && retryHistory.length > 0 && (
+        <div className="bg-card rounded-2xl border border-border shadow-card p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <h2 className="text-[13px] font-bold text-foreground">Retry History</h2>
+              <p className="text-[11px] text-muted-foreground mt-0.5">See whether smaller-batch or slow-pacing retries improved outcomes for this store.</p>
+            </div>
+          </div>
+          <div className="space-y-2">
+            {retryHistory.map((entry: any) => (
+              <div key={entry.id} className="rounded-xl border border-border bg-muted/20 px-3 py-2 flex items-center gap-3 flex-wrap text-[11px]">
+                <Badge variant="outline" className="text-[10px]">{entry.modeLabel}</Badge>
+                <span className={cn('font-semibold', entry.helped ? 'text-success' : entry.status === 'error' ? 'text-destructive' : 'text-foreground')}>
+                  {entry.helped ? 'Helped' : entry.status === 'completed' ? 'Completed' : entry.status}
+                </span>
+                <span className="text-muted-foreground">{entry.productCount} products</span>
+                <span className="text-muted-foreground">{entry.pageCount} pages</span>
+                <span className="text-muted-foreground">{entry.collectionsCompleted} collections</span>
+                {entry.collectionsFailed > 0 && <span className="text-warning">{entry.collectionsFailed} collection failures</span>}
+                <span className="text-muted-foreground ml-auto">{new Date(entry.updatedAt).toLocaleString()}</span>
+              </div>
+            ))}
           </div>
         </div>
       )}

@@ -22,6 +22,27 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4g store-level retry history
+
+### Delivered
+- Added `useStoreRetryHistory` to reconstruct recent retry attempts for a store from `scrape_run_stores` + parent `scrape_runs.settings`
+- Added Store Detail **Retry History** panel showing recent retry attempts and whether they appeared to help
+- Retry history now surfaces:
+  - retry mode (`Default`, `Smaller batch`, `Slow pacing`)
+  - outcome
+  - product/page counts
+  - collection completion/failure hints
+  - timestamp
+- This makes it easier to tell whether slow mode or smaller-batch mode improved outcomes for a given store
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Retry history is inferred from stored run settings and outcomes rather than a dedicated persisted retry-mode column
+- “Helped” is currently heuristic (completed with products/pages) rather than a richer before/after comparison to previous runs
+- The panel is currently on Store Detail only; it is not yet surfaced in Diagnostics or batch review views
+
 ## 2026-03-24 — Phase 4f specialized retry modes
 
 ### Delivered
