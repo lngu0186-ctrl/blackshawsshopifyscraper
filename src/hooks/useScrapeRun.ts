@@ -33,9 +33,7 @@ export function useScrapeRun() {
 
     if (runRes.data) {
       setRunData(runRes.data as ScrapeRun);
-      if (runRes.data.last_event_at) {
-        lastEventTimeRef.current = new Date(runRes.data.last_event_at).getTime();
-      }
+      // last_event_at is not in the current DB schema; stall detection relies on log polling
       if (['completed', 'cancelled', 'failed'].includes(runRes.data.status)) {
         setStatus(runRes.data.status as RunStatus);
         stopStallTimer();

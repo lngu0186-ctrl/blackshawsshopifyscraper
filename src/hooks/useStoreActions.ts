@@ -60,23 +60,15 @@ async function createRunForStores(userId: string, storeIds: string[], overrides?
   return { runId: run.id as string, settings };
 }
 
-function buildStorePatch(store: Store, validation: any) {
+function buildStorePatch(_store: Store, validation: any) {
+  // Only update columns that exist in the current schema
   return {
     normalized_url: validation.normalized_url,
     myshopify_domain: validation.myshopify_domain || null,
-    platform: validation.platform || store.platform || 'unknown',
-    platform_confidence: validation.platform_confidence || store.platform_confidence || null,
-    scrape_strategy: validation.scrape_strategy || store.scrape_strategy,
-    validation_status: validation.validation_status || store.validation_status,
+    scrape_strategy: validation.scrape_strategy || _store.scrape_strategy,
+    validation_status: validation.validation_status || _store.validation_status,
     requires_auth: !!validation.requires_auth,
-    auth_type: validation.auth_type || store.auth_type || 'none',
-    scrapeability_score: validation.scrapeability_score || 0,
-    reachability_status: validation.reachability_status || store.reachability_status || 'unknown',
-    qualification_notes: Array.isArray(validation.qualification_notes)
-      ? validation.qualification_notes.join('\n')
-      : (validation.qualification_notes || store.qualification_notes || null),
-    qualified_at: new Date().toISOString(),
-    store_type: validation.store_type || store.store_type || 'unknown',
+    auth_type: validation.auth_type || _store.auth_type || 'none',
     antibot_suspected: !!validation.antibot_suspected,
     login_required: !!validation.login_required,
     sitemap_found: !!validation.sitemap_found,
