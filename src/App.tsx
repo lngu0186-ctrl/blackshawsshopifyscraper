@@ -96,7 +96,7 @@ function AppLayout() {
       <AppSidebar />
 
       {/* Light workspace */}
-      <main className="flex-1 overflow-hidden flex flex-col">
+      <main className="flex-1 overflow-hidden flex flex-col bg-background">
         <ErrorBoundary>
           <Suspense fallback={<RouteLoader />}>
             <Routes>
