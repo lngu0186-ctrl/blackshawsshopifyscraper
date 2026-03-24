@@ -287,7 +287,13 @@ Deno.serve(async (req) => {
   const runStore = runStoreRes.data;
   const runStoreId = runStore.id;
   const storeSlug = slugify(store.name);
-  const baseUrl = store.normalized_url;
+  // Always scrape from the site origin, never from a collection-scoped stored URL.
+  // This protects older store records that may still have /collections/... in normalized_url.
+  let baseUrl = store.normalized_url;
+  try {
+    const parsedBase = new URL(baseUrl);
+    baseUrl = `${parsedBase.protocol}//${parsedBase.host}`;
+  } catch { /* keep stored value if parsing fails */ }
 
   // ── Store-level AbortController (timeout + cancel propagation) ────────────
   const storeAbort = new AbortController();

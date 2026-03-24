@@ -894,8 +894,8 @@ function Part6({ storeRows, onDetectPlatforms, detectingPlatforms }: { storeRows
               <span><strong>/products.json?page=N</strong> — used by all <code className="font-mono bg-muted px-1 rounded">{productsJsonStores.length}</code> stores using products_json strategy. Most reliable Shopify method.</span>
             </div>
             <div className="flex items-start gap-2">
-              <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
-              <span><strong>/collections/</strong> traversal — NOT implemented. Collections are not discovered or iterated. Only the flat /products.json endpoint is used.</span>
+              <CheckCircle2 className="w-3.5 h-3.5 text-success shrink-0 mt-0.5" />
+              <span><strong>/collections.json traversal</strong> — implemented in the main scraper. Collections are discovered and iterated before falling back to HTML or sitemap strategies.</span>
             </div>
             <div className="flex items-start gap-2">
               <XCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
@@ -915,8 +915,8 @@ function Part6({ storeRows, onDetectPlatforms, detectingPlatforms }: { storeRows
           </h3>
           <div className="space-y-2 text-xs">
             <div className="flex items-start gap-2">
-              <HelpCircle className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
-              <span>No stores are currently classified as WooCommerce (all platform = "unknown"). The scrape-source function supports the WC REST API but scrape-store (the main live scraper) does not have WooCommerce handling.</span>
+              <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+              <span>WooCommerce support exists in the main scraper via <code className="font-mono bg-muted px-1 rounded">wc_api</code>, but existing stores may still need re-validation so their platform/strategy fields reflect reality.</span>
             </div>
             <div className="flex items-start gap-2">
               <Info className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
@@ -965,9 +965,9 @@ function Part7({ storeRows }: { storeRows: StoreAuditRow[] }) {
   const critical = [
     {
       priority: 1,
-      title: 'Fix scraper_events store_id linkage',
-      detail: '91.5% of events (401/438) have store_id = NULL. The scrape-store edge function inserts events without passing store_id. Fix emitEvent() to always include the store_id from the run context. Without this, Diagnostics is effectively broken for per-store filtering.',
-      affects: 'All stores',
+      title: 'Re-validate and re-scrape legacy stores with stale normalized URLs',
+      detail: 'The engine now normalizes collection-scoped store URLs back to the site root, but older store records may still reflect narrow collection URLs or stale strategy/platform metadata until they are re-validated and scraped again.',
+      affects: 'Older stores added before the qualification fixes',
       severity: 'critical',
     },
     {
@@ -1090,8 +1090,8 @@ function Part7({ storeRows }: { storeRows: StoreAuditRow[] }) {
             {[
               'Run platform detection on all existing stores and persist result to stores.platform',
               'Add collection traversal to Shopify scraper (/collections.json → iterate each)',
-              'Add per-page scraper_events so pagination depth can be audited',
-              'Fix store_id in all scraper_events inserts',
+              'Re-validate legacy stores so platform + strategy + normalized root URL are refreshed',
+              'Run fresh tracked scrapes to populate per-page pagination evidence in Diagnostics',
               'Re-compute confidence_score for all existing products (backfill migration)',
             ].map((item, i) => (
               <li key={i} className="text-xs flex items-start gap-1.5 text-foreground">
@@ -1322,7 +1322,7 @@ function VerificationReport({
   const wcWithWrongStrategy = storeRows.filter(s => s.platform === 'woocommerce' && s.scrape_strategy === 'products_json');
   checks.push({
     label: 'WooCommerce stores do NOT start with products_json strategy',
-    detail: 'WooCommerce stores should use wc_api or collection_html. products_json only works for Shopify.',
+    detail: 'WooCommerce stores should use wc_api or collection_html. If a WooCommerce store still shows products_json, it needs re-validation or strategy correction.',
     passed: wcWithWrongStrategy.length === 0,
     value: wcWithWrongStrategy.length === 0
       ? 'No WooCommerce stores with products_json strategy'

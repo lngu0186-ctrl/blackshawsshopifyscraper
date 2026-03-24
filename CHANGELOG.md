@@ -22,6 +22,25 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 1h audit truthfulness + legacy URL hardening
+
+### Delivered
+- Hardened `scrape-store` to always scrape from the site origin even if older records still have collection-scoped `normalized_url` values
+- Updated Scraping Audit copy so it matches the current engine reality:
+  - collection traversal is implemented
+  - WooCommerce support exists in the main scraper
+  - recommendations now focus more on re-validation/re-scrape of legacy stores than already-fixed event-linkage issues
+- Updated verification/recommendation wording to reflect current strategy truth more accurately
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Edge-function runtime changes still require Supabase deployment to affect live scraping
+- Audit recommendations are more truthful now, but live metrics still depend on running fresh validation/scrapes after deployment
+- This pass improves engine robustness for legacy URLs, but does not yet perform automatic bulk re-validation of existing stores
+
 ## 2026-03-24 — Phase 1g audit-driven scraper qualification fixes
 
 ### Delivered
