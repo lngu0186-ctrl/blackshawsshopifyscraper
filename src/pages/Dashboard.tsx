@@ -353,55 +353,52 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
       {/* ── Top Bar ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 px-6 py-3 border-b border-border bg-card flex-shrink-0">
+      <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-border bg-white flex-shrink-0">
         <div>
-          <h1 className="text-[15px] font-bold text-foreground leading-none">Dashboard</h1>
-          <p className="text-[11px] text-muted-foreground mt-0.5">AU Pharmacy Scout — Operations Center</p>
+          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Dashboard</h1>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5">AU Pharmacy Scout — Operations Centre</p>
         </div>
 
-        <div className="flex items-center gap-2 flex-1 max-w-xs">
+        <div className="flex items-center gap-2 flex-1 max-w-sm">
           <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
             <Input
               value={searchTerm}
               onChange={e => setSearchTerm(e.target.value)}
               placeholder="Search products…"
-              className="pl-8 h-8 text-xs bg-background"
+              className="pl-9 h-9 text-[12.5px] rounded-xl bg-background border-border"
             />
           </div>
         </div>
 
         <div className="flex items-center gap-2">
-          {/* System status */}
           <StatusPill status={scrapeStatus === 'idle' ? 'idle' : scrapeStatus} />
 
-          {/* Run scrape */}
           {scrapeStatus === 'idle' && (
-            <Button size="sm" className="h-8 gap-1.5 text-xs bg-primary hover:bg-primary/90 text-primary-foreground" onClick={handleStartScrape}>
-              <Play className="w-3.5 h-3.5" /> Run All Stores
+            <Button size="sm" className="h-8 gap-1.5 text-[12px] rounded-xl bg-foreground hover:bg-foreground/90 text-background font-semibold" onClick={handleStartScrape}>
+              <Play className="w-3 h-3" /> Run All Stores
             </Button>
           )}
           {isRunning && (
-            <Button size="sm" variant="destructive" className="h-8 gap-1.5 text-xs" onClick={cancelRun}>
-              <Square className="w-3.5 h-3.5" /> Cancel
+            <Button size="sm" variant="destructive" className="h-8 gap-1.5 text-[12px] rounded-xl" onClick={cancelRun}>
+              <Square className="w-3 h-3" /> Cancel
             </Button>
           )}
           {['completed', 'cancelled', 'failed'].includes(scrapeStatus) && (
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={resetRun}>
-              <RefreshCw className="w-3.5 h-3.5" /> Reset
+            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-[12px] rounded-xl" onClick={resetRun}>
+              <RefreshCw className="w-3 h-3" /> Reset
             </Button>
           )}
 
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" asChild>
+          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-[12px] rounded-xl border-border" asChild>
             <Link to="/export">
-              <Download className="w-3.5 h-3.5" /> Export
+              <Download className="w-3 h-3" /> Export
             </Link>
           </Button>
 
-          {/* User avatar */}
           <div
-            className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 cursor-pointer"
-            style={{ background: 'hsl(252 82% 60% / 0.12)', color: 'hsl(252 82% 60%)' }}
+            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 cursor-pointer border border-border"
+            style={{ background: 'hsl(222 47% 22% / 0.08)', color: 'hsl(222 47% 22%)' }}
           >
             {user?.email?.slice(0, 2).toUpperCase() ?? 'AU'}
           </div>
