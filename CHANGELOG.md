@@ -22,6 +22,30 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4b structured failure reason codes + retryable HTTP handling
+
+### Delivered
+- Improved `scrape-store` failure coding so runtime issues emit cleaner reason codes such as:
+  - `parent_timeout`
+  - `store_timeout`
+  - `collection_timeout`
+  - `retryable_http_429`
+  - `retryable_http_503`
+  - `request_timeout`
+  - `network_error`
+  - `retry_recovered`
+- Added retry/fallback event emission for retryable HTTP and fetch failures so observability is less dependent on free-text messages
+- Added explicit retry-recovered event emission when a request succeeds after one or more retries
+- Updated diagnostics logic to recognize structured reason codes in addition to legacy text patterns
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- These structured reason codes are implemented in repo code, but hosted behavior depends on Supabase edge-function deployment
+- Retry/backoff now emits better signals, but retry policy itself is still fairly simple (bounded backoff only)
+- Historical events still contain older free-text patterns until new runs are executed
+
 ## 2026-03-24 — Phase 4a timeout fallout classification + truer run summaries
 
 ### Delivered

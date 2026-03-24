@@ -49,8 +49,8 @@ function deriveStatus(store: Store, extra: Omit<StoreDiagnosticSummary, 'storeId
   const scrapedDaysAgo = daysSince(store.last_scraped_at);
   const latestError = extra.latestErrorMessage?.toLowerCase() ?? '';
   const hasRecentSuccess = !!extra.lastSuccessfulRunAt && daysSince(extra.lastSuccessfulRunAt) <= 7;
-  const hasTimeoutFallout = latestError.includes('parent run exceeded 3 hour timeout') || extra.parentTimeoutsLast7Days > 0;
-  const hasRetryableHttp = latestError.includes('http 503') || latestError.includes('http 429') || extra.retryableHttpErrorsLast7Days > 0;
+  const hasTimeoutFallout = latestError.includes('parent_timeout') || latestError.includes('parent run exceeded 3 hour timeout') || extra.parentTimeoutsLast7Days > 0;
+  const hasRetryableHttp = latestError.includes('retryable_http_503') || latestError.includes('retryable_http_429') || latestError.includes('http 503') || latestError.includes('http 429') || extra.retryableHttpErrorsLast7Days > 0;
   const hasRecentBlockSignals = antibotSuspected || validationStatus === 'restricted' || latestError.includes('blocked') || latestError.includes('access restriction');
 
   if (!store.enabled) {
@@ -185,8 +185,8 @@ export function useStoreDiagnostics(stores?: Store[]) {
         if (event.severity === 'error' || event.severity === 'critical') {
           current.failures += 1;
           const eventMessage = `${event.reason_code || ''} ${event.message || ''}`.toLowerCase();
-          if (eventMessage.includes('parent run exceeded 3 hour timeout')) current.parentTimeouts += 1;
-          if (eventMessage.includes('http 503') || eventMessage.includes('http 429')) current.retryableHttpErrors += 1;
+          if (eventMessage.includes('parent_timeout') || eventMessage.includes('parent run exceeded 3 hour timeout')) current.parentTimeouts += 1;
+          if (eventMessage.includes('retryable_http_503') || eventMessage.includes('retryable_http_429') || eventMessage.includes('http 503') || eventMessage.includes('http 429')) current.retryableHttpErrors += 1;
           if (!current.latestErrorMessage) {
             current.latestErrorMessage = event.reason_code || event.message;
           }

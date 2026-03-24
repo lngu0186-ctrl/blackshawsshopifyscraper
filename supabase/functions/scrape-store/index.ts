@@ -136,14 +136,17 @@ function computeConfidence(product: any, priceMin: number | null, hasVariantWith
 
 // ── Categorise errors for reason_code ────────────────────────────────────────
 function classifyError(err: unknown, status?: number): string {
-  const msg = String(err);
-  if (status === 429) return 'http_429';
-  if (status === 503) return 'http_503';
+  const msg = String(err).toLowerCase();
+  if (msg.includes('parent run exceeded 3 hour timeout')) return 'parent_timeout';
+  if (msg.includes('store_timeout') || msg.includes('timed_out')) return 'store_timeout';
+  if (msg.includes('timeout:collection')) return 'collection_timeout';
+  if (status === 429) return 'retryable_http_429';
+  if (status === 503) return 'retryable_http_503';
   if (status && status >= 500) return `http_${status}`;
   if (status === 401 || status === 403) return `http_${status}`;
-  if (msg.startsWith('timeout:')) return 'timeout';
-  if (msg.includes('invalid json') || msg.includes('JSON')) return 'invalid_json';
-  if (msg.includes('ECONNRESET') || msg.includes('network')) return 'network_error';
+  if (msg.startsWith('timeout:')) return 'request_timeout';
+  if (msg.includes('invalid json') || msg.includes('json')) return 'invalid_json';
+  if (msg.includes('econnreset') || msg.includes('network')) return 'network_error';
   return 'unknown_error';
 }
 
@@ -404,6 +407,12 @@ Deno.serve(async (req) => {
         if (res.status === 429 || res.status >= 500) {
           lastError = `HTTP ${res.status}`;
           reasonCode = classifyError(null, res.status);
+          await emitEvent({
+            stage: 'retryable_http_error', severity: 'warning',
+            message: `${label} received HTTP ${res.status}${attempt < BACKOFF_DELAYS.length ? ' — retrying' : ' — retries exhausted'}`,
+            url, reason_code: reasonCode, http_status: res.status,
+            attempt_number: attempt + 1, retry_count: attempt,
+          });
           await res.text().catch(() => {}); // consume body to free connection
           if (attempt < BACKOFF_DELAYS.length) {
             // BUG FIX: pass combined signal to sleep so it wakes immediately on abort
@@ -414,6 +423,14 @@ Deno.serve(async (req) => {
           return { res: null, error: lastError, reasonCode, attempt };
         }
 
+        if (attempt > 0) {
+          await emitEvent({
+            stage: 'retry_recovered', severity: 'info',
+            message: `${label} recovered after ${attempt} retr${attempt === 1 ? 'y' : 'ies'}`,
+            url, reason_code: 'retry_recovered', attempt_number: attempt + 1, retry_count: attempt,
+            was_auto_recovered: true,
+          });
+        }
         return { res, error: null, reasonCode: 'ok', attempt };
       } catch (err) {
         const aborted = storeAbort.signal.aborted || collectionSkipAbort.signal.aborted;
@@ -423,6 +440,14 @@ Deno.serve(async (req) => {
         }
         lastError = String(err);
         reasonCode = classifyError(err);
+        if (reasonCode === 'request_timeout' || reasonCode === 'network_error') {
+          await emitEvent({
+            stage: 'retryable_fetch_error', severity: 'warning',
+            message: `${label} failed with ${reasonCode}${attempt < BACKOFF_DELAYS.length ? ' — retrying' : ' — retries exhausted'}`,
+            url, reason_code: reasonCode, raw_error: lastError,
+            attempt_number: attempt + 1, retry_count: attempt,
+          });
+        }
         if (attempt < BACKOFF_DELAYS.length) {
           const combined = combineAbortSignals(storeAbort.signal, collectionSkipAbort.signal);
           try { await sleep(BACKOFF_DELAYS[attempt], combined.signal); } catch { /* aborted */ }
@@ -1166,10 +1191,13 @@ Deno.serve(async (req) => {
     clearTimeout(storeTimeout);
     const isAbort = (err as Error).name === 'AbortError' || storeAbort.signal.aborted;
     const terminal = isAbort ? (storeAbort.signal.reason === 'store_timeout' ? 'timed_out' : 'cancelled') : 'failed';
+    const failureReasonCode = isAbort
+      ? (storeAbort.signal.reason === 'store_timeout' ? 'store_timeout' : 'operator_cancelled')
+      : classifyError(err);
     await emitEvent({
       stage: 'run_failed', severity: isAbort ? 'warning' : 'critical',
       message: `${store.name} ${terminal}: ${String(err)}`,
-      raw_error: String(err), reason_code: isAbort ? 'operator_cancelled' : 'unknown_error',
+      raw_error: String(err), reason_code: failureReasonCode,
     });
     await supabaseAdmin.from('scrape_run_stores').update({
       status: 'error', terminal_status: terminal,
