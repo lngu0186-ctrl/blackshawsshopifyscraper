@@ -464,11 +464,11 @@ export default function Dashboard() {
             <div className="xl:col-span-1 space-y-4">
 
               {/* Extraction Pipeline */}
-              <div className="bg-card rounded-2xl border border-border shadow-card">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+              <div className="bg-white rounded-2xl border border-border shadow-card">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                   <div>
-                    <h2 className="text-[13px] font-bold text-foreground">Extraction Pipeline</h2>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">All-time totals (canonical)</p>
+                    <h2 className="text-[13.5px] font-bold text-foreground">Extraction Pipeline</h2>
+                    <p className="text-[11px] text-muted-foreground mt-0.5">All-time totals</p>
                   </div>
                   {isRunning && <span className="w-2 h-2 rounded-full bg-warning animate-pulse" />}
                 </div>
@@ -480,27 +480,27 @@ export default function Dashboard() {
               </div>
 
               {/* Field Coverage */}
-              <div className="bg-card rounded-2xl border border-border shadow-card">
-                <div className="px-4 py-3 border-b border-border">
-                  <h2 className="text-[13px] font-bold text-foreground">Extraction Health</h2>
-                  <p className="text-[10px] text-muted-foreground mt-0.5">Field coverage across all products</p>
+              <div className="bg-white rounded-2xl border border-border shadow-card">
+                <div className="px-5 py-4 border-b border-border">
+                  <h2 className="text-[13.5px] font-bold text-foreground">Extraction Health</h2>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">Field coverage across all products</p>
                 </div>
-                <div className="p-4 space-y-3">
+                <div className="p-5 space-y-3.5">
                   {coverageFields.map(f => (
                     <CoverageBar key={f.label} {...f} />
                   ))}
                   {totalScraped === 0 && (
-                    <p className="text-[11px] text-muted-foreground text-center py-4">No products scraped yet. Run a source.</p>
+                    <p className="text-[11px] text-muted-foreground text-center py-4">No products scraped yet.</p>
                   )}
                 </div>
               </div>
 
               {/* Export Readiness */}
-              <div className="bg-card rounded-2xl border border-border shadow-card">
-                <div className="px-4 py-3 border-b border-border">
-                  <h2 className="text-[13px] font-bold text-foreground">Export Readiness</h2>
+              <div className="bg-white rounded-2xl border border-border shadow-card">
+                <div className="px-5 py-4 border-b border-border">
+                  <h2 className="text-[13.5px] font-bold text-foreground">Export Readiness</h2>
                 </div>
-                <div className="p-4 space-y-3">
+                <div className="p-5 space-y-3">
                   {[
                     { label: 'Shopify Ready',   value: readyCount,   total: totalScraped, color: 'bg-success', icon: CheckCircle2, iconCls: 'text-success' },
                     { label: 'Review Required', value: reviewCount,  total: totalScraped, color: 'bg-warning', icon: AlertTriangle, iconCls: 'text-warning' },
@@ -508,28 +508,28 @@ export default function Dashboard() {
                   ].map(row => {
                     const pct = totalScraped > 0 ? Math.round((row.value / totalScraped) * 100) : 0;
                     return (
-                      <div key={row.label} className="space-y-1">
-                        <div className="flex items-center justify-between text-[11px]">
-                          <span className="flex items-center gap-1.5 font-medium">
-                            <row.icon className={`w-3 h-3 ${row.iconCls}`} />
+                      <div key={row.label} className="space-y-1.5">
+                        <div className="flex items-center justify-between text-[12px]">
+                          <span className="flex items-center gap-1.5 font-medium text-foreground">
+                            <row.icon className={`w-3.5 h-3.5 ${row.iconCls}`} />
                             {row.label}
                           </span>
-                          <span className="font-bold tabular-nums">{row.value.toLocaleString()} <span className="text-muted-foreground font-normal">({pct}%)</span></span>
+                          <span className="font-bold tabular-nums">{row.value.toLocaleString()} <span className="text-muted-foreground font-normal text-[11px]">({pct}%)</span></span>
                         </div>
                         <div className="h-1.5 bg-muted rounded-full overflow-hidden">
-                          <div className={`h-full rounded-full ${row.color}`} style={{ width: `${pct}%` }} />
+                          <div className={`h-full rounded-full transition-all duration-700 ${row.color}`} style={{ width: `${pct}%` }} />
                         </div>
                       </div>
                     );
                   })}
 
-                  <div className="flex gap-2 pt-1">
-                    <Button size="sm" className="flex-1 h-7 text-[11px] bg-primary hover:bg-primary/90 text-primary-foreground" asChild>
+                  <div className="flex gap-2 pt-2">
+                    <Button size="sm" className="flex-1 h-8 text-[12px] rounded-xl bg-foreground hover:bg-foreground/90 text-background font-semibold" asChild>
                       <Link to="/export">
-                        <Download className="w-3 h-3 mr-1" /> Export CSV
+                        <Download className="w-3 h-3 mr-1.5" /> Export CSV
                       </Link>
                     </Button>
-                    <Button size="sm" variant="outline" className="flex-1 h-7 text-[11px]" asChild>
+                    <Button size="sm" variant="outline" className="flex-1 h-8 text-[12px] rounded-xl" asChild>
                       <Link to="/export">Review →</Link>
                     </Button>
                   </div>
