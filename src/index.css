@@ -4,114 +4,147 @@
 
 @layer base {
   :root {
-    /* ─── Light workspace ─────────────────────────────────────── */
-    --background: 220 20% 97%;
-    --foreground: 224 24% 12%;
+    /* ─── Page & Surface ──────────────────────────────────────── */
+    --background: 220 18% 96%;      /* warm light grey page */
+    --foreground: 222 22% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 224 24% 12%;
+    --card-foreground: 222 22% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 224 24% 12%;
+    --popover-foreground: 222 22% 10%;
 
-    /* Purple primary */
-    --primary: 252 82% 60%;
+    /* ─── Brand — restrained warm charcoal accent ─────────────── */
+    --primary: 222 47% 22%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 16% 94%;
-    --secondary-foreground: 224 24% 28%;
+    --secondary: 220 14% 93%;
+    --secondary-foreground: 222 16% 32%;
 
-    --muted: 220 14% 94%;
-    --muted-foreground: 220 12% 52%;
+    --muted: 220 12% 93%;
+    --muted-foreground: 220 10% 52%;
 
-    --accent: 252 82% 60%;
+    --accent: 222 47% 22%;
     --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 72% 56%;
+    /* ─── Semantic ────────────────────────────────────────────── */
+    --destructive: 0 70% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --warning: 38 95% 52%;
+    --warning: 36 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --success: 142 72% 40%;
+    --success: 145 60% 36%;
     --success-foreground: 0 0% 100%;
 
-    --border: 220 14% 89%;
-    --input: 220 14% 92%;
-    --ring: 252 82% 60%;
+    /* ─── Chrome ──────────────────────────────────────────────── */
+    --border: 220 12% 88%;
+    --input: 220 12% 91%;
+    --ring: 222 47% 22%;
 
-    --radius: 0.75rem;
+    /* ─── Corner radius ───────────────────────────────────────── */
+    --radius: 0.875rem;
 
-    /* ─── Dark sidebar ────────────────────────────────────────── */
-    --sidebar-background: 224 28% 10%;
-    --sidebar-foreground: 220 20% 70%;
-    --sidebar-primary: 252 82% 65%;
+    /* ─── Sidebar — dark navy ─────────────────────────────────── */
+    --sidebar-background: 222 38% 12%;
+    --sidebar-foreground: 220 18% 65%;
+    --sidebar-primary: 220 80% 66%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 224 24% 16%;
-    --sidebar-accent-foreground: 220 20% 92%;
-    --sidebar-border: 224 24% 16%;
-    --sidebar-ring: 252 82% 65%;
-    --sidebar-muted: 220 18% 45%;
+    --sidebar-accent: 222 32% 18%;
+    --sidebar-accent-foreground: 220 20% 94%;
+    --sidebar-border: 222 28% 18%;
+    --sidebar-ring: 220 80% 66%;
+    --sidebar-muted: 220 16% 42%;
 
-    /* ─── Price tokens ────────────────────────────────────────── */
-    --price-up: 0 72% 56%;
-    --price-down: 142 72% 40%;
-    --price-neutral: 220 12% 52%;
+    /* ─── Price direction ─────────────────────────────────────── */
+    --price-up: 0 70% 52%;
+    --price-down: 145 60% 36%;
+    --price-neutral: 220 10% 52%;
 
     /* ─── Scrape status ───────────────────────────────────────── */
-    --scrape-running: 38 95% 52%;
-    --scrape-complete: 142 72% 40%;
-    --scrape-error: 0 72% 56%;
-    --scrape-queued: 220 12% 52%;
+    --scrape-running: 36 92% 50%;
+    --scrape-complete: 145 60% 36%;
+    --scrape-error: 0 70% 52%;
+    --scrape-queued: 220 10% 52%;
 
-    /* ─── Shadows & gradients ─────────────────────────────────── */
-    --shadow-card: 0 1px 3px 0 hsl(220 20% 10% / 0.06), 0 1px 2px -1px hsl(220 20% 10% / 0.06);
-    --shadow-card-md: 0 4px 16px -4px hsl(220 20% 10% / 0.10), 0 2px 6px -2px hsl(220 20% 10% / 0.06);
-    --shadow-glow: 0 0 24px hsl(252 82% 60% / 0.18);
+    /* ─── Chart warm accent palette ───────────────────────────── */
+    --chart-1: 222 47% 30%;
+    --chart-2: 197 70% 48%;
+    --chart-3: 36 92% 50%;
+    --chart-4: 145 60% 40%;
+    --chart-5: 0 70% 52%;
+
+    /* ─── Shadows ─────────────────────────────────────────────── */
+    --shadow-card: 0 1px 4px 0 hsl(222 30% 12% / 0.05), 0 1px 2px -1px hsl(222 30% 12% / 0.04);
+    --shadow-card-md: 0 4px 20px -4px hsl(222 30% 12% / 0.09), 0 2px 8px -2px hsl(222 30% 12% / 0.05);
+    --shadow-card-lg: 0 8px 32px -8px hsl(222 30% 12% / 0.12), 0 4px 12px -4px hsl(222 30% 12% / 0.06);
     --gradient-card: linear-gradient(135deg, hsl(0 0% 100%) 0%, hsl(220 14% 98%) 100%);
   }
 }
 
 @layer base {
-  * {
-    @apply border-border;
-  }
+  * { @apply border-border; }
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
-  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
-  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 3px; }
-  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.5); }
+  ::-webkit-scrollbar-thumb { background: hsl(var(--border)); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: hsl(var(--muted-foreground) / 0.4); }
 }
 
 @layer utilities {
-  .price-up   { color: hsl(var(--price-up)); }
-  .price-down { color: hsl(var(--price-down)); }
+  /* Price direction */
+  .price-up      { color: hsl(var(--price-up)); }
+  .price-down    { color: hsl(var(--price-down)); }
   .price-neutral { color: hsl(var(--price-neutral)); }
 
+  /* Shadow helpers */
   .shadow-card    { box-shadow: var(--shadow-card); }
   .shadow-card-md { box-shadow: var(--shadow-card-md); }
-  .shadow-glow    { box-shadow: var(--shadow-glow); }
+  .shadow-card-lg { box-shadow: var(--shadow-card-lg); }
   .gradient-card  { background: var(--gradient-card); }
 
+  /* Scrape status text */
   .status-running  { color: hsl(var(--scrape-running)); }
   .status-complete { color: hsl(var(--scrape-complete)); }
   .status-error    { color: hsl(var(--scrape-error)); }
   .status-queued   { color: hsl(var(--scrape-queued)); }
 
-  /* Sidebar-scoped text helpers */
+  /* Sidebar text */
   .text-sidebar-muted { color: hsl(var(--sidebar-muted)); }
 
-  /* Animated pulse ring for running states */
+  /* Premium card surface */
+  .card-surface {
+    @apply bg-card rounded-2xl border border-border shadow-card;
+  }
+  .card-surface-md {
+    @apply bg-card rounded-2xl border border-border shadow-card-md;
+  }
+
+  /* Pill badge */
+  .pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold;
+  }
+
+  /* Page header */
+  .page-header-title {
+    @apply text-[22px] font-bold tracking-tight text-foreground;
+  }
+  .page-header-sub {
+    @apply text-[13px] text-muted-foreground mt-0.5;
+  }
+
+  /* Stall / pulse ring */
   @keyframes pulse-ring {
     0%, 100% { opacity: 1; transform: scale(1); }
     50%       { opacity: 0.5; transform: scale(1.05); }
   }
   .animate-pulse-ring { animation: pulse-ring 1.8s ease-in-out infinite; }
 
-  /* Smooth count-up shimmer */
+  /* Shimmer skeleton */
   @keyframes shimmer {
     0%   { background-position: -400px 0; }
     100% { background-position: 400px 0; }
