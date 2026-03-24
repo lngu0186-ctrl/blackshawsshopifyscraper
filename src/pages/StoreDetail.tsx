@@ -7,6 +7,7 @@ import { useRevalidateStores, useScrapeStores } from '@/hooks/useStoreActions';
 import { useStoreMetricsHistory } from '@/hooks/usePriceHistory';
 import { useProducts } from '@/hooks/useProducts';
 import { useStoreHealth } from '@/hooks/useStoreHealth';
+import { useStoreDiagnostics } from '@/hooks/useStoreDiagnostics';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts';
 import {
   Package, TrendingDown, Clock, ExternalLink, Loader2, Power,
@@ -74,6 +75,8 @@ export default function StoreDetail() {
   const { data: metrics } = useStoreMetricsHistory(id ?? null);
   const { data: _productsData } = useProducts({ page: 1, pageSize: 5, storeId: id, sortBy: 'scraped_at', sortDir: 'desc' });
   const { data: health, isLoading: healthLoading } = useStoreHealth(id, store);
+  const { data: diagnosticsMap } = useStoreDiagnostics(store ? [store] : undefined);
+  const diagnostic = store ? diagnosticsMap?.[store.id] : undefined;
   const revalidateStores = useRevalidateStores();
   const scrapeStores = useScrapeStores();
 
@@ -148,6 +151,49 @@ export default function StoreDetail() {
           <Link to={`/diagnostics?store=${store.id}`}>Open diagnostics</Link>
         </Button>
       </div>
+
+      {diagnostic && (
+        <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">Recommended action</p>
+              <p className="text-sm text-foreground mt-1">{diagnostic.recommendedAction}</p>
+            </div>
+            <Badge variant="outline" className="text-[10px]">{diagnostic.label}</Badge>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {(diagnostic.status === 'invalid' || diagnostic.status === 'never_scraped') && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => revalidateStores.mutate([store])}
+                disabled={revalidateStores.isPending}
+              >
+                Revalidate now
+              </Button>
+            )}
+            {(diagnostic.status === 'timeout_fallout' || diagnostic.status === 'retryable_http_error' || diagnostic.status === 'stale' || diagnostic.status === 'zero_products' || diagnostic.status === 'failing') && (
+              <Button
+                size="sm"
+                onClick={() => scrapeStores.mutate([store.id])}
+                disabled={scrapeStores.isPending}
+              >
+                Follow recommendation
+              </Button>
+            )}
+            {diagnostic.status === 'auth_required' && (
+              <Button asChild variant="outline" size="sm">
+                <Link to={`/diagnostics?store=${store.id}`}>Review auth/block evidence</Link>
+              </Button>
+            )}
+            {diagnostic.status === 'blocked' && (
+              <Button asChild variant="outline" size="sm">
+                <Link to={`/diagnostics?store=${store.id}`}>Inspect blocking signals</Link>
+              </Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* ── Store Health Panel ─────────────────────────────────────────────────── */}
       <div className="bg-card rounded-2xl border border-border shadow-card p-5 space-y-4">

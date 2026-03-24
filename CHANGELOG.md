@@ -22,6 +22,25 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4e Store Detail recommended actions + quick actions
+
+### Delivered
+- Surfaced the diagnostic **recommended action** directly on `StoreDetail`
+- Added a highlighted recommendation callout showing the current operational next step for the store
+- Added one-click follow-up actions where the recommendation maps cleanly to an existing workflow, including:
+  - revalidate now
+  - scrape now / follow recommendation
+  - inspect diagnostics/auth/blocking evidence
+- This brings the recommendation system beyond Diagnostics and into the per-store operational view
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Quick actions currently map to existing generic revalidate/scrape flows; there is not yet a dedicated “small batch retry” or “slow mode retry” control
+- Recommendation actions are still heuristic and not yet aware of operator notes or manual acknowledgements
+- Some recommendations still route to diagnostics for deeper inspection rather than executing a fully specialized workflow
+
 ## 2026-03-24 — Phase 4d diagnostics recommended actions
 
 ### Delivered
