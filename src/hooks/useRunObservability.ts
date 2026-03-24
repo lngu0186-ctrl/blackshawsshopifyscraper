@@ -13,7 +13,7 @@ export function useRecentRunSummaries(limit = 8) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('scrape_runs')
-        .select('id,status,run_status,total_stores,completed_stores,total_products,total_price_changes,error_count,pages_visited,collections_total,collections_completed,collections_failed,collections_skipped,active_store_name,latest_message,last_event_at,last_success_at,created_at,started_at,finished_at')
+        .select('id,status,run_status,total_stores,completed_stores,total_products,total_price_changes,error_count,pages_visited,created_at,started_at,finished_at')
         .eq('user_id', user!.id)
         .order('created_at', { ascending: false })
         .limit(limit);
