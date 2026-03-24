@@ -212,22 +212,22 @@ export default function Diagnostics() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      <div className="flex-shrink-0 border-b border-border px-6 py-3 flex items-center justify-between bg-card">
+      <div className="flex-shrink-0 border-b border-border px-6 py-3.5 flex items-center justify-between bg-white">
         <div>
-          <h1 className="text-[15px] font-semibold text-foreground">Diagnostics</h1>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Store-first risk queue with supporting scraper evidence underneath
+          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Diagnostics</h1>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5">
+            Store-first risk queue with supporting scraper evidence
           </p>
         </div>
         <Button
           size="sm"
           variant="outline"
-          className="gap-2 text-[12px] h-8"
+          className="gap-2 text-[12px] h-8 rounded-xl"
           onClick={handleAISummary}
           disabled={analyzeFailure.isPending || isEmpty}
         >
           {analyzeFailure.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-primary" />}
-          AI Health Summary
+          AI Summary
         </Button>
       </div>
 
