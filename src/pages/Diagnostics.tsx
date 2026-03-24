@@ -280,20 +280,20 @@ export default function Diagnostics() {
           )}
 
           {!isEmpty && (
-            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+            <div className="bg-white rounded-2xl border border-border shadow-card overflow-hidden">
               <div className="p-4 border-b border-border flex items-center gap-3 flex-wrap">
                 <div className="relative flex-1 min-w-[220px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
                     value={storeSearch}
                     onChange={e => setStoreSearch(e.target.value)}
-                    placeholder="Search store name, URL, reason, issue…"
-                    className="pl-9 h-8 text-[12px]"
+                    placeholder="Search store name, URL, reason…"
+                    className="pl-9 h-8 text-[12px] rounded-xl"
                   />
                 </div>
 
                 <Select value={riskFilter} onValueChange={setRiskFilter}>
-                  <SelectTrigger className="h-8 text-[11px] w-40">
+                  <SelectTrigger className="h-8 text-[11px] w-40 rounded-xl">
                     <Filter className="w-3 h-3 mr-1" />
                     <SelectValue placeholder="Risk" />
                   </SelectTrigger>
