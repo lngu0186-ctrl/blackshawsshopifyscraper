@@ -688,9 +688,8 @@ export default function Dashboard() {
                         <span>{runObservability.latestFinished.finished_at ? new Date(runObservability.latestFinished.finished_at).toLocaleString() : 'In progress'}</span>
                       </div>
                       <div className="flex items-center gap-4 flex-wrap">
-                        <span>{(runObservability.latestFinished.total_products ?? 0).toLocaleString()} products</span>
-                        <span>{(runObservability.latestFinished.pages_visited ?? 0).toLocaleString()} pages</span>
-                        <span>{(runObservability.latestFinished.collections_completed ?? 0).toLocaleString()} collections completed</span>
+                        <span>{((runObservability.latestFinished as any).total_products ?? 0).toLocaleString()} products</span>
+                        <span>{((runObservability.latestFinished as any).pages_visited ?? 0).toLocaleString()} pages</span>
                       </div>
                       {latestRunStores && latestRunStores.length > 0 && (
                         <div className="flex items-center gap-4 flex-wrap">

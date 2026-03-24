@@ -104,13 +104,13 @@ Deno.serve(async (req) => {
     let pageTitle = '';
     let metaDescription = '';
     let sitemapProductCount = 0;
+    // Score components
+    let score = 0;
+
     if (wasCollectionScopedUrl) {
       qualificationNotes.push('Collection-scoped URL normalized to site root for full-store scraping');
       score += 5;
     }
-
-    // Score components
-    let score = 0;
 
     // ── Fetch homepage ─────────────────────────────────────────────────────────
     const homepageRes = await fetchWithTimeout(`${normalized}/`);
