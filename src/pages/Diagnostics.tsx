@@ -212,22 +212,22 @@ export default function Diagnostics() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      <div className="flex-shrink-0 border-b border-border px-6 py-3 flex items-center justify-between bg-card">
+      <div className="flex-shrink-0 border-b border-border px-6 py-3.5 flex items-center justify-between bg-white">
         <div>
-          <h1 className="text-[15px] font-semibold text-foreground">Diagnostics</h1>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Store-first risk queue with supporting scraper evidence underneath
+          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Diagnostics</h1>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5">
+            Store-first risk queue with supporting scraper evidence
           </p>
         </div>
         <Button
           size="sm"
           variant="outline"
-          className="gap-2 text-[12px] h-8"
+          className="gap-2 text-[12px] h-8 rounded-xl"
           onClick={handleAISummary}
           disabled={analyzeFailure.isPending || isEmpty}
         >
           {analyzeFailure.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5 text-primary" />}
-          AI Health Summary
+          AI Summary
         </Button>
       </div>
 
@@ -242,18 +242,20 @@ export default function Diagnostics() {
           )}
 
           {!isEmpty && (
-            <div className="grid grid-cols-2 xl:grid-cols-5 gap-4">
+            <div className="grid grid-cols-2 xl:grid-cols-5 gap-3">
               {[
-                { label: 'Urgent Stores', value: riskCounts.urgent, icon: XCircle, color: 'text-destructive' },
-                { label: 'At-Risk Stores', value: riskCounts.warning, icon: AlertTriangle, color: 'text-warning' },
-                { label: 'Healthy Stores', value: riskCounts.healthy, icon: CheckCircle2, color: 'text-success' },
-                { label: 'Critical Errors', value: summary?.criticalErrors ?? 0, icon: ShieldAlert, color: 'text-destructive' },
-                { label: 'Warnings', value: summary?.warnings ?? 0, icon: BarChart3, color: 'text-warning' },
-              ].map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className="bg-card rounded-2xl border border-border p-4 shadow-card">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Icon className={cn('w-4 h-4', color)} />
-                    <p className="text-[11px] text-muted-foreground">{label}</p>
+                { label: 'Urgent Stores', value: riskCounts.urgent, icon: XCircle, color: 'text-destructive', bg: 'bg-destructive/8' },
+                { label: 'At-Risk Stores', value: riskCounts.warning, icon: AlertTriangle, color: 'text-warning', bg: 'bg-warning/8' },
+                { label: 'Healthy Stores', value: riskCounts.healthy, icon: CheckCircle2, color: 'text-success', bg: 'bg-success/8' },
+                { label: 'Critical Errors', value: summary?.criticalErrors ?? 0, icon: ShieldAlert, color: 'text-destructive', bg: 'bg-destructive/8' },
+                { label: 'Warnings', value: summary?.warnings ?? 0, icon: BarChart3, color: 'text-warning', bg: 'bg-warning/8' },
+              ].map(({ label, value, icon: Icon, color, bg }) => (
+                <div key={label} className="bg-white rounded-2xl border border-border p-4 shadow-card">
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${bg}`}>
+                      <Icon className={cn('w-3.5 h-3.5', color)} />
+                    </div>
+                    <p className="text-[11px] text-muted-foreground font-medium">{label}</p>
                   </div>
                   {summaryLoading || diagnosticsLoading ? (
                     <Skeleton className="h-7 w-16" />
@@ -278,20 +280,20 @@ export default function Diagnostics() {
           )}
 
           {!isEmpty && (
-            <div className="bg-card rounded-2xl border border-border shadow-card overflow-hidden">
+            <div className="bg-white rounded-2xl border border-border shadow-card overflow-hidden">
               <div className="p-4 border-b border-border flex items-center gap-3 flex-wrap">
                 <div className="relative flex-1 min-w-[220px]">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
                   <Input
                     value={storeSearch}
                     onChange={e => setStoreSearch(e.target.value)}
-                    placeholder="Search store name, URL, reason, issue…"
-                    className="pl-9 h-8 text-[12px]"
+                    placeholder="Search store name, URL, reason…"
+                    className="pl-9 h-8 text-[12px] rounded-xl"
                   />
                 </div>
 
                 <Select value={riskFilter} onValueChange={setRiskFilter}>
-                  <SelectTrigger className="h-8 text-[11px] w-40">
+                  <SelectTrigger className="h-8 text-[11px] w-40 rounded-xl">
                     <Filter className="w-3 h-3 mr-1" />
                     <SelectValue placeholder="Risk" />
                   </SelectTrigger>
@@ -311,7 +313,7 @@ export default function Diagnostics() {
                 </Select>
 
                 <Select value={sortBy} onValueChange={v => setSortBy(v as any)}>
-                  <SelectTrigger className="h-8 text-[11px] w-36">
+                  <SelectTrigger className="h-8 text-[11px] w-36 rounded-xl">
                     <ArrowUpDown className="w-3 h-3 mr-1" />
                     <SelectValue placeholder="Sort" />
                   </SelectTrigger>
@@ -329,7 +331,7 @@ export default function Diagnostics() {
               <div className="overflow-auto">
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-border bg-muted/30">
+                    <tr className="border-b border-border bg-muted/20">
                       {['Risk', 'Store', 'Reason', 'Recommended Action', 'Best Mode', 'Products', 'Errors 7d', 'Warnings 7d', 'Latest Run', 'Last Success', 'Failure Delta', 'Last Scraped', 'Actions'].map(h => (
                         <th key={h} className="text-left text-[10px] font-semibold text-muted-foreground uppercase tracking-wide px-4 py-2.5 whitespace-nowrap">
                           {h}

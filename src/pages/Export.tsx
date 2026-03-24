@@ -34,9 +34,9 @@ function DataQualityPanel({ onEnrich }: { onEnrich: () => void }) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-card">
+    <div className="bg-white rounded-2xl border border-border shadow-card p-5 space-y-4">
       <div className="flex items-center justify-between">
-        <h2 className="text-sm font-semibold">Data Quality</h2>
+        <h2 className="text-[13.5px] font-bold text-foreground">Data Quality</h2>
         {isLoading && <Loader2 className="w-3.5 h-3.5 animate-spin text-muted-foreground" />}
       </div>
 
@@ -334,18 +334,25 @@ export default function Export() {
   }
 
   return (
-    <div className="p-6 max-w-5xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Export</h1>
-        <p className="text-sm text-muted-foreground mt-1">Scrape supported AU pharmacy sites, enrich products, and export clean data</p>
+    <div className="flex flex-col h-full overflow-hidden bg-background">
+
+      {/* ── Top Bar ───────────────────────────────────────────── */}
+      <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-border bg-white flex-shrink-0">
+        <div>
+          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Export</h1>
+          <p className="text-[11.5px] text-muted-foreground mt-0.5">Scrape, enrich, and export clean Shopify-ready data</p>
+        </div>
       </div>
 
+      <div className="flex-1 overflow-y-auto">
+        <div className="p-6 max-w-5xl">
+
       <Tabs defaultValue="export">
-        <TabsList className="h-8">
-          <TabsTrigger value="export" className="text-xs h-7">Export</TabsTrigger>
-          <TabsTrigger value="review" className="text-xs h-7">Product Review</TabsTrigger>
-          <TabsTrigger value="sources" className="text-xs h-7">Sources</TabsTrigger>
-          <TabsTrigger value="legacy" className="text-xs h-7">Store Exports</TabsTrigger>
+        <TabsList className="h-9 bg-muted/60 rounded-xl p-1">
+          <TabsTrigger value="export" className="text-[12px] h-7 rounded-lg">Export</TabsTrigger>
+          <TabsTrigger value="review" className="text-[12px] h-7 rounded-lg">Product Review</TabsTrigger>
+          <TabsTrigger value="sources" className="text-[12px] h-7 rounded-lg">Sources</TabsTrigger>
+          <TabsTrigger value="legacy" className="text-[12px] h-7 rounded-lg">Store Exports</TabsTrigger>
         </TabsList>
 
         {/* ── Export Panel ── */}
@@ -354,39 +361,39 @@ export default function Export() {
             <DataQualityPanel onEnrich={() => enrichMutation.mutate({ limit: 50 })} />
 
             <div className="space-y-3">
-              <div className="rounded-lg border border-border bg-card p-5 space-y-3 shadow-card">
-                <h2 className="text-sm font-semibold">Export Modes</h2>
+              <div className="bg-white rounded-2xl border border-border shadow-card p-5 space-y-3">
+                <h2 className="text-[13.5px] font-bold text-foreground">Export Modes</h2>
 
-                <Button className="w-full h-12 justify-start gap-3 bg-primary hover:bg-primary/90 text-primary-foreground"
+                <Button className="w-full h-12 justify-start gap-3 rounded-xl bg-foreground hover:bg-foreground/90 text-background"
                   onClick={handleExportReady}>
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Export Shopify Ready CSV</p>
-                    <p className="text-xs opacity-80">{readyCount.toLocaleString()} rows — price guaranteed</p>
+                    <p className="text-[13px] font-semibold">Export Shopify Ready CSV</p>
+                    <p className="text-[11px] opacity-70">{readyCount.toLocaleString()} rows — price guaranteed</p>
                   </div>
                 </Button>
 
-                <Button variant="outline" className="w-full h-12 justify-start gap-3"
+                <Button variant="outline" className="w-full h-12 justify-start gap-3 rounded-xl"
                   onClick={handleExportReview}>
-                  <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                  <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Export Review Required CSV</p>
-                    <p className="text-xs text-muted-foreground">{reviewCount.toLocaleString()} rows — missing fields column included</p>
+                    <p className="text-[13px] font-semibold">Export Review Required CSV</p>
+                    <p className="text-[11px] text-muted-foreground">{reviewCount.toLocaleString()} rows — missing fields column</p>
                   </div>
                 </Button>
 
-                <Button variant="outline" className="w-full h-12 justify-start gap-3"
+                <Button variant="outline" className="w-full h-12 justify-start gap-3 rounded-xl"
                   onClick={handleExportRaw}>
-                  <FileSpreadsheet className="w-4 h-4 text-primary" />
+                  <FileSpreadsheet className="w-4 h-4 text-primary flex-shrink-0" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Export Full Raw Excel</p>
-                    <p className="text-xs text-muted-foreground">{totalProducts.toLocaleString()} rows — all data + debug columns</p>
+                    <p className="text-[13px] font-semibold">Export Full Raw Excel</p>
+                    <p className="text-[11px] text-muted-foreground">{totalProducts.toLocaleString()} rows — all data + debug columns</p>
                   </div>
                 </Button>
 
-                <div className="flex items-center gap-3 pt-1 border-t border-border">
+                <div className="flex items-center gap-3 pt-2 border-t border-border">
                   <Switch id="includeIncomplete" checked={includeIncomplete} onCheckedChange={setIncludeIncomplete} />
-                  <Label htmlFor="includeIncomplete" className="text-xs cursor-pointer text-muted-foreground">Include incomplete rows in Shopify CSV</Label>
+                  <Label htmlFor="includeIncomplete" className="text-[11.5px] cursor-pointer text-muted-foreground">Include incomplete rows in Shopify CSV</Label>
                 </div>
               </div>
             </div>
@@ -405,13 +412,13 @@ export default function Export() {
 
         {/* ── Legacy store-based exports ── */}
         <TabsContent value="legacy" className="space-y-4 mt-4">
-          <div className="rounded-lg border border-border bg-card p-5 space-y-4 shadow-card">
-            <h2 className="text-sm font-semibold">Store-based Exports (existing stores)</h2>
+          <div className="bg-white rounded-2xl border border-border shadow-card p-5 space-y-4">
+            <h2 className="text-[13.5px] font-bold text-foreground">Store-based Exports</h2>
 
             <div className="space-y-1.5">
-              <Label className="text-xs">Scope</Label>
+              <Label className="text-[12px]">Scope</Label>
               <Select value={scope} onValueChange={(v: any) => setScope(v)}>
-                <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-9 rounded-xl text-[12px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All stores</SelectItem>
                   <SelectItem value="selected">Selected stores</SelectItem>
@@ -421,7 +428,7 @@ export default function Export() {
 
             {scope === 'selected' && (
               <div className="space-y-1.5">
-                <Label className="text-xs">Select stores</Label>
+                <Label className="text-[12px]">Select stores</Label>
                 <div className="space-y-1.5">
                   {stores?.map(s => (
                     <label key={s.id} className="flex items-center gap-2 cursor-pointer">
@@ -429,7 +436,7 @@ export default function Export() {
                         onChange={e => setSelectedStoreIds(prev =>
                           e.target.checked ? [...prev, s.id] : prev.filter(id => id !== s.id)
                         )} />
-                      <span className="text-sm">{s.name}</span>
+                      <span className="text-[12px]">{s.name}</span>
                     </label>
                   ))}
                 </div>
@@ -438,50 +445,33 @@ export default function Export() {
 
             <div className="flex items-center gap-3">
               <Switch id="changedOnly" checked={changedOnly} onCheckedChange={setChangedOnly} />
-              <Label htmlFor="changedOnly" className="text-sm cursor-pointer">Changed only (since last export)</Label>
+              <Label htmlFor="changedOnly" className="text-[12px] cursor-pointer">Changed only (since last export)</Label>
             </div>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <Button className="h-12 justify-start gap-3 bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={() => exportShopifyCsv.mutate({ storeIds, changedOnly })}
-              disabled={exportShopifyCsv.isPending}>
-              {exportShopifyCsv.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export Shopify CSV</p>
-                <p className="text-xs opacity-75">Importable product feed</p>
-              </div>
-            </Button>
-            <Button variant="outline" className="h-12 justify-start gap-3"
-              onClick={() => exportJson.mutate({ storeIds, changedOnly })}
-              disabled={exportJson.isPending}>
-              {exportJson.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export JSON</p>
-                <p className="text-xs text-muted-foreground">Raw product data</p>
-              </div>
-            </Button>
-            <Button variant="outline" className="h-12 justify-start gap-3"
-              onClick={() => exportExcel.mutate({ storeIds, changedOnly })}
-              disabled={exportExcel.isPending}>
-              {exportExcel.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileSpreadsheet className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export Excel (.xlsx)</p>
-                <p className="text-xs text-muted-foreground">Shopify columns preserved</p>
-              </div>
-            </Button>
-            <Button variant="outline" className="h-12 justify-start gap-3"
-              onClick={() => exportPriceHistoryCsv.mutate({ storeIds })}
-              disabled={exportPriceHistoryCsv.isPending}>
-              {exportPriceHistoryCsv.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <History className="w-4 h-4" />}
-              <div className="text-left">
-                <p className="text-sm font-medium">Export Price History CSV</p>
-                <p className="text-xs text-muted-foreground">All price change events</p>
-              </div>
-            </Button>
+            {[
+              { label: 'Export Shopify CSV', sub: 'Importable product feed', icon: Download, isPrimary: true, action: () => exportShopifyCsv.mutate({ storeIds, changedOnly }), pending: exportShopifyCsv.isPending },
+              { label: 'Export JSON', sub: 'Raw product data', icon: FileText, isPrimary: false, action: () => exportJson.mutate({ storeIds, changedOnly }), pending: exportJson.isPending },
+              { label: 'Export Excel (.xlsx)', sub: 'Shopify columns preserved', icon: FileSpreadsheet, isPrimary: false, action: () => exportExcel.mutate({ storeIds, changedOnly }), pending: exportExcel.isPending },
+              { label: 'Export Price History CSV', sub: 'All price change events', icon: History, isPrimary: false, action: () => exportPriceHistoryCsv.mutate({ storeIds }), pending: exportPriceHistoryCsv.isPending },
+            ].map(({ label, sub, icon: Icon, isPrimary, action, pending }) => (
+              <Button key={label}
+                className={`h-12 justify-start gap-3 rounded-xl ${isPrimary ? 'bg-foreground hover:bg-foreground/90 text-background' : ''}`}
+                variant={isPrimary ? 'default' : 'outline'}
+                onClick={action} disabled={pending}>
+                {pending ? <Loader2 className="w-4 h-4 animate-spin flex-shrink-0" /> : <Icon className="w-4 h-4 flex-shrink-0" />}
+                <div className="text-left">
+                  <p className="text-[13px] font-semibold">{label}</p>
+                  <p className={`text-[11px] ${isPrimary ? 'opacity-70' : 'text-muted-foreground'}`}>{sub}</p>
+                </div>
+              </Button>
+            ))}
           </div>
         </TabsContent>
       </Tabs>
+        </div>
+      </div>
     </div>
   );
 }
