@@ -51,10 +51,12 @@ export function useRunObservabilitySummary(limit = 8) {
     const latestFinished = rows.find((r: any) => ['completed', 'failed', 'cancelled'].includes(r.status));
     const completed = rows.filter((r: any) => r.status === 'completed');
     const failed = rows.filter((r: any) => r.status === 'failed');
+    const timeoutAffected = rows.filter((r: any) => String(r.latest_message || '').toLowerCase().includes('parent run exceeded 3 hour timeout'));
 
     return {
       active,
       latestFinished,
+      timeoutAffectedRuns: timeoutAffected.length,
       completionRate: rows.length ? Math.round((completed.length / rows.length) * 100) : 0,
       failureRate: rows.length ? Math.round((failed.length / rows.length) * 100) : 0,
       avgPagesVisited: completed.length

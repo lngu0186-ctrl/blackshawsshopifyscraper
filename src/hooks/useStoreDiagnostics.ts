@@ -8,6 +8,8 @@ export type StoreDiagnosticStatus =
   | 'invalid'
   | 'auth_required'
   | 'blocked'
+  | 'timeout_fallout'
+  | 'retryable_http_error'
   | 'never_scraped'
   | 'zero_products'
   | 'failing'
@@ -22,6 +24,8 @@ export interface StoreDiagnosticSummary {
   reason: string;
   failuresLast7Days: number;
   warningsLast7Days: number;
+  parentTimeoutsLast7Days: number;
+  retryableHttpErrorsLast7Days: number;
   latestRunStatus: string | null;
   latestRunAt: string | null;
   lastSuccessfulRunAt: string | null;
@@ -43,6 +47,11 @@ function deriveStatus(store: Store, extra: Omit<StoreDiagnosticSummary, 'storeId
   const antibotSuspected = Boolean((store as any).antibot_suspected);
   const productCount = store.total_products ?? 0;
   const scrapedDaysAgo = daysSince(store.last_scraped_at);
+  const latestError = extra.latestErrorMessage?.toLowerCase() ?? '';
+  const hasRecentSuccess = !!extra.lastSuccessfulRunAt && daysSince(extra.lastSuccessfulRunAt) <= 7;
+  const hasTimeoutFallout = latestError.includes('parent run exceeded 3 hour timeout') || extra.parentTimeoutsLast7Days > 0;
+  const hasRetryableHttp = latestError.includes('http 503') || latestError.includes('http 429') || extra.retryableHttpErrorsLast7Days > 0;
+  const hasRecentBlockSignals = antibotSuspected || validationStatus === 'restricted' || latestError.includes('blocked') || latestError.includes('access restriction');
 
   if (!store.enabled) {
     return { status: 'disabled', label: 'Disabled', reason: 'Store is turned off' };
@@ -56,15 +65,27 @@ function deriveStatus(store: Store, extra: Omit<StoreDiagnosticSummary, 'storeId
     return { status: 'auth_required', label: 'Auth required', reason: 'Needs working authentication before scraping' };
   }
 
-  if (antibotSuspected || validationStatus === 'restricted' || extra.latestErrorMessage?.toLowerCase().includes('blocked')) {
+  if (hasRecentSuccess && productCount > 0 && !hasRetryableHttp) {
+    return { status: 'productive', label: 'Productive', reason: 'Recent successful scrape produced usable products' };
+  }
+
+  if (hasRecentBlockSignals && !hasRecentSuccess) {
     return { status: 'blocked', label: 'Blocked', reason: 'Anti-bot, access restriction, or blocking suspected' };
+  }
+
+  if (hasTimeoutFallout && !hasRecentSuccess) {
+    return { status: 'timeout_fallout', label: 'Run timeout', reason: extra.latestErrorMessage ?? 'Parent run timeout polluted this store status' };
+  }
+
+  if (hasRetryableHttp && !hasRecentSuccess) {
+    return { status: 'retryable_http_error', label: 'Retryable HTTP error', reason: extra.latestErrorMessage ?? 'Temporary HTTP failure such as 503/429' };
   }
 
   if (!store.last_scraped_at) {
     return { status: 'never_scraped', label: 'Never scraped', reason: 'No scrape has completed yet' };
   }
 
-  if (extra.latestRunStatus === 'error' || extra.failuresLast7Days >= 3) {
+  if (extra.latestRunStatus === 'error' || (extra.failuresLast7Days >= 3 && !hasTimeoutFallout)) {
     return { status: 'failing', label: 'Failing', reason: extra.latestErrorMessage ?? 'Recent scrape errors need attention' };
   }
 
@@ -143,6 +164,8 @@ export function useStoreDiagnostics(stores?: Store[]) {
       const eventStats = new Map<string, {
         failures: number;
         warnings: number;
+        parentTimeouts: number;
+        retryableHttpErrors: number;
         latestErrorMessage: string | null;
         lastEventAt: string | null;
       }>();
@@ -152,6 +175,8 @@ export function useStoreDiagnostics(stores?: Store[]) {
         const current = eventStats.get(event.store_id) ?? {
           failures: 0,
           warnings: 0,
+          parentTimeouts: 0,
+          retryableHttpErrors: 0,
           latestErrorMessage: null,
           lastEventAt: null,
         };
@@ -159,6 +184,9 @@ export function useStoreDiagnostics(stores?: Store[]) {
         if (!current.lastEventAt) current.lastEventAt = event.created_at;
         if (event.severity === 'error' || event.severity === 'critical') {
           current.failures += 1;
+          const eventMessage = `${event.reason_code || ''} ${event.message || ''}`.toLowerCase();
+          if (eventMessage.includes('parent run exceeded 3 hour timeout')) current.parentTimeouts += 1;
+          if (eventMessage.includes('http 503') || eventMessage.includes('http 429')) current.retryableHttpErrors += 1;
           if (!current.latestErrorMessage) {
             current.latestErrorMessage = event.reason_code || event.message;
           }
@@ -175,6 +203,8 @@ export function useStoreDiagnostics(stores?: Store[]) {
         const stats = eventStats.get(store.id) ?? {
           failures: 0,
           warnings: 0,
+          parentTimeouts: 0,
+          retryableHttpErrors: 0,
           latestErrorMessage: null,
           lastEventAt: null,
         };
@@ -183,6 +213,8 @@ export function useStoreDiagnostics(stores?: Store[]) {
         const base = {
           failuresLast7Days: stats.failures,
           warningsLast7Days: stats.warnings,
+          parentTimeoutsLast7Days: stats.parentTimeouts,
+          retryableHttpErrorsLast7Days: stats.retryableHttpErrors,
           latestRunStatus: latestRun?.status ?? null,
           latestRunAt: latestRun?.finished_at ?? latestRun?.updated_at ?? latestRun?.started_at ?? null,
           lastSuccessfulRunAt: lastSuccess?.finished_at ?? lastSuccess?.updated_at ?? lastSuccess?.started_at ?? null,

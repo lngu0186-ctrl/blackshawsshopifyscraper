@@ -698,6 +698,9 @@ export default function Dashboard() {
                             Store failures: <span className="text-foreground">{latestRunStores.filter((s: any) => s.status === 'error').length}</span>
                           </span>
                           <span>
+                            Timeout fallout: <span className="text-foreground">{latestRunStores.filter((s: any) => String(s.terminal_status || s.message || '').toLowerCase().includes('parent run exceeded 3 hour timeout')).length}</span>
+                          </span>
+                          <span>
                             Collection failures: <span className="text-foreground">{latestRunStores.reduce((sum: number, s: any) => sum + (s.collections_failed ?? 0), 0)}</span>
                           </span>
                           <span>
@@ -708,6 +711,7 @@ export default function Dashboard() {
                       <div className="flex items-center gap-4 flex-wrap">
                         <span>Completion rate: <span className="text-foreground">{runObservability.completionRate}%</span></span>
                         <span>Failure rate: <span className="text-foreground">{runObservability.failureRate}%</span></span>
+                        <span>Timeout-affected runs: <span className="text-foreground">{runObservability.timeoutAffectedRuns}</span></span>
                         <span>Avg pages/run: <span className="text-foreground">{runObservability.avgPagesVisited}</span></span>
                       </div>
                     </div>

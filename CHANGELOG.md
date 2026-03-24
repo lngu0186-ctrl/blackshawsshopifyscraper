@@ -22,6 +22,27 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4a timeout fallout classification + truer run summaries
+
+### Delivered
+- Improved store diagnostics classifier so **parent-run timeout fallout** is separated from true store failure/blocking
+- Added new diagnostic states/signals for:
+  - `timeout_fallout`
+  - `retryable_http_error`
+  - parent timeout counts in the last 7 days
+  - retryable HTTP error counts in the last 7 days
+- Changed classification priority so a recent successful scrape with products can override stale block suspicion, reducing false “blocked” results for productive stores
+- Improved dashboard recent-run summaries to show timeout fallout explicitly alongside store failures, collection failures, and retry/fallback hints
+- Added timeout-affected run count to run observability summary
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Timeout fallout and retryable HTTP signals are inferred from current message text/reason patterns, not yet from dedicated structured columns
+- Existing historical data may still contain stale classifications until new runs/diagnostics refresh the store summaries
+- 503/429 errors are now separated diagnostically, but retry/backoff logic itself is still a future engine improvement
+
 ## 2026-03-24 — Phase 3b manual vendor chunking
 
 ### Delivered
