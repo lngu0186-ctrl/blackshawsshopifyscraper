@@ -61,11 +61,12 @@ interface KpiCardProps {
 
 function KpiCard({ icon: Icon, label, value, sub, trend, color = 'text-primary', loading, pulse }: KpiCardProps) {
   const animVal = useCountUp(value);
+  const iconBg = color === 'text-success' ? 'bg-success/10' : color === 'text-warning' ? 'bg-warning/10' : color === 'text-destructive' ? 'bg-destructive/10' : 'bg-primary/8';
   return (
-    <div className="bg-card rounded-2xl border border-border shadow-card p-4 hover:shadow-card-md transition-shadow duration-200">
+    <div className="bg-white rounded-2xl border border-border shadow-card p-4 hover:shadow-card-md transition-all duration-200 hover:-translate-y-0.5">
       <div className="flex items-start justify-between mb-3">
-        <div className={`w-9 h-9 rounded-xl flex items-center justify-center ${color === 'text-primary' ? 'bg-primary/10' : color === 'text-success' ? 'bg-success/10' : color === 'text-warning' ? 'bg-warning/10' : color === 'text-destructive' ? 'bg-destructive/10' : 'bg-muted'}`}>
-          <Icon className={`w-4 h-4 ${color}`} />
+        <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${iconBg}`}>
+          <Icon className={`w-3.5 h-3.5 ${color}`} />
         </div>
         {trend !== undefined && (
           <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full flex items-center gap-0.5 ${
@@ -77,14 +78,14 @@ function KpiCard({ icon: Icon, label, value, sub, trend, color = 'text-primary',
         )}
       </div>
       {loading ? (
-        <Skeleton className="h-7 w-20 mb-1" />
+        <Skeleton className="h-6 w-16 mb-1" />
       ) : (
-        <p className={`text-2xl font-bold tabular-nums ${pulse ? 'animate-count-up' : ''}`}>
+        <p className={`text-[22px] font-bold tabular-nums tracking-tight ${pulse ? 'animate-count-up' : ''}`}>
           {animVal.toLocaleString()}
         </p>
       )}
-      <p className="text-[11px] text-muted-foreground mt-0.5">{label}</p>
-      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+      <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{label}</p>
+      {sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>}
     </div>
   );
 }
