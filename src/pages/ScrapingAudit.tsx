@@ -102,7 +102,7 @@ function useStoreAudit() {
 
       const { data: products, error: pErr } = await supabase
         .from('products')
-        .select('store_id, product_scrape_status, confidence_score, price_min, images, body_html')
+        .select('store_id, product_scrape_status, confidence_score, price_min, images, body_html, product_type')
         .eq('user_id', user!.id);
       if (pErr) throw pErr;
 

@@ -75,7 +75,15 @@ Deno.serve(async (req) => {
     }
     normalized = normalized.replace(/\/+$/, '');
     let domain = '';
-    try { domain = new URL(normalized).hostname; } catch { /* ignore */ }
+    let wasCollectionScopedUrl = false;
+    try {
+      const parsed = new URL(normalized);
+      domain = parsed.hostname;
+      // Important: always normalize stores to the site origin, not a single collection URL.
+      // This prevents under-scraping sites that were added using /collections/... URLs.
+      wasCollectionScopedUrl = parsed.pathname.startsWith('/collections/');
+      normalized = `${parsed.protocol}//${parsed.host}`;
+    } catch { /* ignore */ }
 
     // ── Qualification state ────────────────────────────────────────────────────
     let reachable = false;
@@ -96,6 +104,10 @@ Deno.serve(async (req) => {
     let pageTitle = '';
     let metaDescription = '';
     let sitemapProductCount = 0;
+    if (wasCollectionScopedUrl) {
+      qualificationNotes.push('Collection-scoped URL normalized to site root for full-store scraping');
+      score += 5;
+    }
 
     // Score components
     let score = 0;
@@ -164,7 +176,7 @@ Deno.serve(async (req) => {
       if (wooApiRes && (wooApiRes.ok || wooApiRes.status === 401)) {
         platform = 'woocommerce';
         platformConfidence = wooApiRes.ok ? 'high' : 'medium';
-        scrapeStrategy = 'woocommerce_api';
+        scrapeStrategy = 'wc_api';
         validationStatus = 'valid';
         score += 20;
         qualificationNotes.push('WooCommerce REST API detected');
@@ -203,26 +215,45 @@ Deno.serve(async (req) => {
     }
 
     // ── Collections/categories detection ──────────────────────────────────────
-    const collectionTestUrls = [
-      `${normalized}/collections/all/products.json?limit=3`,
-      `${normalized}/collections/vitamins/products.json?limit=3`,
-      `${normalized}/collections/supplements/products.json?limit=3`,
-    ];
-    for (const cUrl of collectionTestUrls) {
-      const cRes = await fetchWithTimeout(cUrl);
-      if (cRes && cRes.ok) {
-        try {
-          const d = await cRes.json();
-          if (d && Array.isArray(d.products)) {
-            sampleCollections.push(cUrl.replace(normalized, '').replace('/products.json?limit=3', ''));
-            score += 20;
-            qualificationNotes.push(`Collection endpoint accessible: ${cUrl.replace(normalized, '')}`);
-            if (!sampleProductUrl && d.products[0]?.handle) {
-              sampleProductUrl = `${normalized}/products/${d.products[0].handle}`;
+    // Prefer real collection discovery over a few hardcoded guesses.
+    const collectionsJsonRes = await fetchWithTimeout(`${normalized}/collections.json?limit=20`);
+    if (collectionsJsonRes && collectionsJsonRes.ok) {
+      try {
+        const d = await collectionsJsonRes.json();
+        if (d && Array.isArray(d.collections) && d.collections.length > 0) {
+          sampleCollections = d.collections
+            .map((c: any) => c?.handle)
+            .filter(Boolean)
+            .slice(0, 5)
+            .map((handle: string) => `/collections/${handle}`);
+          score += 20;
+          qualificationNotes.push(`collections.json accessible — ${d.collections.length} collections discovered`);
+        }
+      } catch { /* ignore */ }
+    }
+
+    if (sampleCollections.length === 0) {
+      const collectionTestUrls = [
+        `${normalized}/collections/all/products.json?limit=3`,
+        `${normalized}/collections/vitamins/products.json?limit=3`,
+        `${normalized}/collections/supplements/products.json?limit=3`,
+      ];
+      for (const cUrl of collectionTestUrls) {
+        const cRes = await fetchWithTimeout(cUrl);
+        if (cRes && cRes.ok) {
+          try {
+            const d = await cRes.json();
+            if (d && Array.isArray(d.products)) {
+              sampleCollections.push(cUrl.replace(normalized, '').replace('/products.json?limit=3', ''));
+              score += 20;
+              qualificationNotes.push(`Collection endpoint accessible: ${cUrl.replace(normalized, '')}`);
+              if (!sampleProductUrl && d.products[0]?.handle) {
+                sampleProductUrl = `${normalized}/products/${d.products[0].handle}`;
+              }
+              break;
             }
-            break;
-          }
-        } catch { /* ignore */ }
+          } catch { /* ignore */ }
+        }
       }
     }
 
@@ -274,7 +305,8 @@ Deno.serve(async (req) => {
     // ── Final validation status ────────────────────────────────────────────────
     if (requiresAuth) {
       validationStatus = 'password_protected';
-      scrapeStrategy = 'password_protected';
+      // Keep the underlying scrape strategy/platform truthy rather than overwriting it
+      // with a non-executable pseudo-strategy. Auth gating is a validation state.
     } else if (platform === 'unknown' || score < 20) {
       validationStatus = 'invalid';
     }
@@ -284,7 +316,6 @@ Deno.serve(async (req) => {
       requiresAuth = true;
       authType = 'storefront_password';
       validationStatus = 'password_protected';
-      scrapeStrategy = 'password_protected';
     }
 
     const valid = platform !== 'unknown' || score >= 20;

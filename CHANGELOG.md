@@ -22,6 +22,24 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 1g audit-driven scraper qualification fixes
+
+### Delivered
+- Fixed `validate-store` URL normalization so stores added with collection-scoped URLs are normalized back to the site root for full-store scraping
+- Fixed WooCommerce strategy naming mismatch in validation (`wc_api` instead of legacy `woocommerce_api`)
+- Stopped auth-gated stores from overwriting real scrape strategy with a pseudo-strategy like `password_protected`
+- Upgraded validation-time category discovery to prefer real `/collections.json` discovery instead of only probing a few hardcoded collection guesses
+- Fixed a Scraping Audit data bug where category counts could be falsely reported as zero because `product_type` was not selected in the audit query
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Supabase edge function changes require deployment to take effect live; a Git push alone updates the repo but not the hosted function runtime
+- The audit recommendations panel still contains some historical/static guidance text that may lag behind newer engine fixes
+- A full re-scrape is still needed after deployment to materially improve some audit findings in live data
+
 ## 2026-03-24 — Phase 1f products page scroll + drawer hardening
 
 ### Delivered
