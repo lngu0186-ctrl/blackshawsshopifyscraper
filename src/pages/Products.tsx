@@ -215,6 +215,8 @@ export default function Products() {
         </div>
       </div>
 
+      {/* ── Toolbar ─────────────────────────────────────────────── */}
+      <div className="flex-shrink-0 px-6 py-3 border-b border-border bg-white flex flex-wrap gap-2 items-center">
         {/* Filters */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
