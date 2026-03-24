@@ -1,9 +1,11 @@
 import { useMemo, useState } from 'react';
-import { CheckCircle2, GitMerge, Info, Search, XCircle } from 'lucide-react';
+import { CheckCircle2, ExternalLink, GitMerge, Info, Search, XCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Drawer, DrawerContent, DrawerDescription, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { useCanonicalMatchQueue, useCanonicalReviewActions } from '@/hooks/useCanonicalMatches';
 
 function confidenceTone(score: number) {
@@ -11,6 +13,13 @@ function confidenceTone(score: number) {
   if (score >= 75) return 'bg-primary/10 text-primary border-primary/30';
   if (score >= 60) return 'bg-warning/10 text-warning border-warning/30';
   return 'bg-destructive/10 text-destructive border-destructive/30';
+}
+
+function confidenceBand(score: number) {
+  if (score >= 90) return 'high';
+  if (score >= 75) return 'strong';
+  if (score >= 60) return 'medium';
+  return 'low';
 }
 
 function confidenceExplanation(row: any) {
@@ -42,18 +51,23 @@ export default function CanonicalReview() {
   const review = useCanonicalReviewActions();
   const [search, setSearch] = useState('');
   const [selected, setSelected] = useState<string[]>([]);
+  const [methodFilter, setMethodFilter] = useState('all');
+  const [bandFilter, setBandFilter] = useState('all');
+  const [detailRow, setDetailRow] = useState<any | null>(null);
 
   const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return (data ?? []).filter((row: any) => {
-      if (!q) return true;
       const cp = row.canonical_products;
       const sr = row.product_source_records;
+      if (methodFilter !== 'all' && row.match_method !== methodFilter) return false;
+      if (bandFilter !== 'all' && confidenceBand(row.confidence_score) !== bandFilter) return false;
+      if (!q) return true;
       return [cp?.title, cp?.canonical_brand, cp?.canonical_barcode, sr?.title, sr?.vendor, sr?.barcode, sr?.sku, sr?.source_name]
         .filter(Boolean)
         .some(v => String(v).toLowerCase().includes(q));
     });
-  }, [data, search]);
+  }, [data, search, methodFilter, bandFilter]);
 
   const toggleOne = (id: string) => {
     setSelected(current => current.includes(id) ? current.filter(x => x !== id) : [...current, id]);
@@ -78,6 +92,30 @@ export default function CanonicalReview() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search title, brand, barcode, source…" className="pl-9" />
         </div>
+        <Select value={methodFilter} onValueChange={setMethodFilter}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Match method" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All methods</SelectItem>
+            <SelectItem value="barcode">Barcode</SelectItem>
+            <SelectItem value="title_brand">Title + brand</SelectItem>
+            <SelectItem value="heuristic">Heuristic</SelectItem>
+            <SelectItem value="manual">Manual</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={bandFilter} onValueChange={setBandFilter}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue placeholder="Confidence band" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All confidence</SelectItem>
+            <SelectItem value="high">High (90+)</SelectItem>
+            <SelectItem value="strong">Strong (75–89)</SelectItem>
+            <SelectItem value="medium">Medium (60–74)</SelectItem>
+            <SelectItem value="low">Low (&lt;60)</SelectItem>
+          </SelectContent>
+        </Select>
         <Button variant="outline" size="sm" onClick={toggleAll} disabled={!rows.length}>
           {selected.length === rows.length && selected.length > 0 ? 'Clear selection' : 'Select all'}
         </Button>
@@ -170,11 +208,62 @@ export default function CanonicalReview() {
                 <Button size="sm" variant="outline" onClick={() => review.mutate({ ids: [row.id], decision: 'rejected' })} disabled={review.isPending}>
                   <XCircle className="w-3.5 h-3.5 mr-1.5" /> Reject match
                 </Button>
+                <Button size="sm" variant="ghost" onClick={() => setDetailRow(row)}>
+                  Inspect source record
+                </Button>
               </div>
             </div>
           );
         })}
       </div>
+
+      <Drawer open={!!detailRow} onOpenChange={(open) => !open && setDetailRow(null)}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Source record detail</DrawerTitle>
+            <DrawerDescription>
+              Inspect the current source record and canonical candidate without leaving the review queue.
+            </DrawerDescription>
+          </DrawerHeader>
+
+          {detailRow && (
+            <div className="px-4 pb-6 grid gap-4 md:grid-cols-2 text-sm">
+              <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Canonical product</p>
+                <p><span className="text-muted-foreground">Title:</span> {detailRow.canonical_products?.title || '—'}</p>
+                <p><span className="text-muted-foreground">Brand:</span> {detailRow.canonical_products?.canonical_brand || '—'}</p>
+                <p><span className="text-muted-foreground">Barcode:</span> {detailRow.canonical_products?.canonical_barcode || '—'}</p>
+                <p><span className="text-muted-foreground">Type:</span> {detailRow.canonical_products?.product_type || '—'}</p>
+                <p><span className="text-muted-foreground">Status:</span> {detailRow.canonical_products?.match_status || '—'}</p>
+              </div>
+
+              <div className="rounded-xl border border-border bg-card p-4 space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Source record</p>
+                <p><span className="text-muted-foreground">Title:</span> {detailRow.product_source_records?.title || '—'}</p>
+                <p><span className="text-muted-foreground">Vendor:</span> {detailRow.product_source_records?.vendor || '—'}</p>
+                <p><span className="text-muted-foreground">Barcode:</span> {detailRow.product_source_records?.barcode || '—'}</p>
+                <p><span className="text-muted-foreground">SKU:</span> {detailRow.product_source_records?.sku || '—'}</p>
+                <p><span className="text-muted-foreground">Price:</span> {detailRow.product_source_records?.price_min ?? '—'}</p>
+                <p><span className="text-muted-foreground">Source:</span> {detailRow.product_source_records?.source_name || detailRow.product_source_records?.source_kind || '—'}</p>
+                {detailRow.product_source_records?.product_id && (
+                  <div className="pt-2">
+                    <a
+                      href={`/products`}
+                      className="inline-flex items-center gap-1 text-primary hover:underline"
+                    >
+                      Open products view <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              <div className="md:col-span-2 rounded-xl border border-border bg-muted/20 p-4 text-xs text-muted-foreground">
+                <span className="font-medium text-foreground">Confidence explanation:</span> {confidenceExplanation(detailRow)}
+              </div>
+            </div>
+          )}
+        </DrawerContent>
+      </Drawer>
     </div>
   );
 }

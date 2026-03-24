@@ -22,6 +22,25 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 2d canonical review filters + source detail drawer
+
+### Delivered
+- Added Canonical Review filters for:
+  - match method
+  - confidence band
+- Added source-record inspection drawer so a reviewer can inspect canonical vs source detail without leaving the queue
+- Added per-row **Inspect source record** action
+- Kept bulk review actions and confidence explanation intact while making the queue easier to triage at scale
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Source detail drawer is still a lightweight inspector, not a full edit/merge workbench yet
+- Product deep-linking from the drawer is still generic rather than a routed product-detail destination
+- Filtering is local to the fetched queue; there are no server-side filtered queries or saved review views yet
+
 ## 2026-03-24 — Phase 2c bulk canonical review + confidence explanation
 
 ### Delivered
