@@ -38,16 +38,17 @@ export function useCanonicalReviewActions() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ id, decision, notes }: { id: string; decision: 'accepted' | 'rejected'; notes?: string }) => {
+    mutationFn: async ({ ids, decision, notes }: { ids: string[]; decision: 'accepted' | 'rejected'; notes?: string }) => {
       const { error } = await supabase
         .from('canonical_product_matches')
         .update({ decision, decision_notes: notes || null, decided_at: new Date().toISOString() } as any)
-        .eq('id', id);
+        .in('id', ids);
       if (error) throw error;
     },
     onSuccess: (_, vars) => {
       queryClient.invalidateQueries({ queryKey: ['canonical_match_queue'] });
-      toast.success(vars.decision === 'accepted' ? 'Match accepted' : 'Match rejected');
+      const count = vars.ids.length;
+      toast.success(`${vars.decision === 'accepted' ? 'Accepted' : 'Rejected'} ${count} match${count === 1 ? '' : 'es'}`);
     },
     onError: (e: any) => toast.error(e.message || 'Failed to update match review'),
   });

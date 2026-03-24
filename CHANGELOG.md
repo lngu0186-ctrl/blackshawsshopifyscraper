@@ -22,6 +22,27 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 2c bulk canonical review + confidence explanation
+
+### Delivered
+- Upgraded Canonical Review into a real queue workflow:
+  - row selection
+  - select all / clear selection
+  - bulk accept selected
+  - bulk reject selected
+- Upgraded canonical review mutation logic to support bulk decision updates
+- Added explicit confidence guidance to the review page so score ranges are understandable at a glance
+- Added per-row confidence explanation text to clarify why a match scored the way it did (barcode, title+brand heuristic, missing hard anchors, etc.)
+
+### Test results
+- `npm run build` completed successfully
+- Existing large bundle/chunk size warning remains
+
+### Known limitations
+- Confidence explanation is heuristic/UI-derived from currently stored fields, not yet generated from a persisted scorer trace
+- Bulk review acts on current selected queue items only; no advanced filters or saved views yet
+- Accept/reject decisions update the junction rows, but do not yet cascade richer canonical status updates across related records
+
 ## 2026-03-24 — Phase 2b canonical backfill + review UI + sharper run failure summaries
 
 ### Delivered
