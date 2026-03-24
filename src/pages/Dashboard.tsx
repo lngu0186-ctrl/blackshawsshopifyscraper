@@ -618,47 +618,42 @@ export default function Dashboard() {
               )}
 
               {/* Store Library quick view */}
-              <div className="bg-card rounded-2xl border border-border shadow-card">
-                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                  <h2 className="text-[13px] font-bold text-foreground">Store Library</h2>
-                  <span className="text-[10px] text-muted-foreground">{stores?.length ?? 0} total</span>
+              <div className="bg-white rounded-2xl border border-border shadow-card">
+                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+                  <h2 className="text-[13.5px] font-bold text-foreground">Store Library</h2>
+                  <span className="text-[11px] text-muted-foreground">{stores?.length ?? 0} total</span>
                 </div>
-                <div className="divide-y divide-border/50">
+                <div className="divide-y divide-border/40">
                   {storesLoading && [1,2,3].map(i => (
-                    <div key={i} className="px-4 py-3 flex items-center gap-3">
+                    <div key={i} className="px-5 py-3 flex items-center gap-3">
                       <Skeleton className="w-2 h-2 rounded-full" />
                       <Skeleton className="h-3 flex-1" />
                     </div>
                   ))}
                   {!storesLoading && stores?.slice(0, 8).map(store => (
                     <Link key={store.id} to={`/stores/${store.id}`}>
-                      <div className="px-4 py-2.5 flex items-center gap-3 hover:bg-muted/50 transition-colors group">
-                        <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          store.enabled ? 'bg-success' : 'bg-muted-foreground/30'
-                        }`} />
+                      <div className="px-5 py-3 flex items-center gap-3 hover:bg-muted/40 transition-colors group">
+                        <div className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${store.enabled ? 'bg-success' : 'bg-muted-foreground/30'}`} />
                         <div className="flex-1 min-w-0">
-                          <p className="text-[12px] font-medium text-foreground truncate group-hover:text-primary transition-colors">{store.name}</p>
-                          <p className="text-[10px] text-muted-foreground">{store.total_products.toLocaleString()} products</p>
+                          <p className="text-[12.5px] font-medium text-foreground truncate">{store.name}</p>
+                          <p className="text-[10.5px] text-muted-foreground">{store.total_products.toLocaleString()} products</p>
                         </div>
-                        <div className="flex items-center gap-1.5">
-                          <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded ${
-                            store.validation_status === 'valid' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
-                          }`}>
-                            {store.validation_status}
-                          </span>
-                          <ExternalLink className="w-3 h-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-                        </div>
+                        <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+                          store.validation_status === 'valid' ? 'bg-success/10 text-success' : 'bg-muted text-muted-foreground'
+                        }`}>
+                          {store.validation_status}
+                        </span>
                       </div>
                     </Link>
                   ))}
                   {!storesLoading && (stores?.length ?? 0) === 0 && (
-                    <div className="px-4 py-6 text-center text-[11px] text-muted-foreground">
+                    <div className="px-5 py-8 text-center text-[12px] text-muted-foreground">
                       No stores yet. Use "Seed starter library" in the sidebar.
                     </div>
                   )}
                   {(stores?.length ?? 0) > 8 && (
-                    <div className="px-4 py-2 text-center">
-                      <Button variant="ghost" size="sm" className="h-6 text-[11px] text-muted-foreground" asChild>
+                    <div className="px-5 py-2.5 text-center">
+                      <Button variant="ghost" size="sm" className="h-7 text-[12px] text-muted-foreground rounded-xl" asChild>
                         <Link to="/stores">View all stores →</Link>
                       </Button>
                     </div>
@@ -668,51 +663,29 @@ export default function Dashboard() {
 
               {/* Last run summary */}
               {(lastScraped || recentRuns.length > 0) && (
-                <div className="bg-card rounded-2xl border border-border shadow-card px-4 py-3 space-y-2">
+                <div className="bg-white rounded-2xl border border-border shadow-card px-5 py-4 space-y-2">
                   {lastScraped && (
-                    <div className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                    <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                       <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>Last scraped: <span className="font-medium text-foreground">{lastScraped.name}</span></span>
-                      <span className="ml-auto">{new Date(lastScraped.last_scraped_at!).toLocaleString()}</span>
+                      <span className="ml-auto text-[11px]">{new Date(lastScraped.last_scraped_at!).toLocaleString()}</span>
                     </div>
                   )}
                   {runObservability.latestFinished && (
-                    <div className="text-[11px] text-muted-foreground space-y-1">
+                    <div className="text-[11.5px] text-muted-foreground space-y-1.5">
                       <div className="flex items-center justify-between gap-2">
-                        <span>Latest run: <span className="text-foreground font-medium">{runObservability.latestFinished.run_status || runObservability.latestFinished.status}</span></span>
-                        <span>{runObservability.latestFinished.finished_at ? new Date(runObservability.latestFinished.finished_at).toLocaleString() : 'In progress'}</span>
+                        <span>Latest run: <span className="text-foreground font-semibold">{runObservability.latestFinished.run_status || runObservability.latestFinished.status}</span></span>
+                        <span className="text-[11px]">{runObservability.latestFinished.finished_at ? new Date(runObservability.latestFinished.finished_at).toLocaleString() : 'In progress'}</span>
                       </div>
                       <div className="flex items-center gap-4 flex-wrap">
                         <span>{((runObservability.latestFinished as any).total_products ?? 0).toLocaleString()} products</span>
                         <span>{((runObservability.latestFinished as any).pages_visited ?? 0).toLocaleString()} pages</span>
-                      </div>
-                      {latestRunStores && latestRunStores.length > 0 && (
-                        <div className="flex items-center gap-4 flex-wrap">
-                          <span>
-                            Store failures: <span className="text-foreground">{latestRunStores.filter((s: any) => s.status === 'error').length}</span>
-                          </span>
-                          <span>
-                            Timeout fallout: <span className="text-foreground">{latestRunStores.filter((s: any) => String(s.terminal_status || s.message || '').toLowerCase().includes('parent run exceeded 3 hour timeout')).length}</span>
-                          </span>
-                          <span>
-                            Collection failures: <span className="text-foreground">{latestRunStores.reduce((sum: number, s: any) => sum + (s.collections_failed ?? 0), 0)}</span>
-                          </span>
-                          <span>
-                            Retry/fallback hints: <span className="text-foreground">{latestRunStores.filter((s: any) => String(s.terminal_status || s.message || '').toLowerCase().includes('retry')).length + latestRunStores.filter((s: any) => String(s.terminal_status || s.message || '').toLowerCase().includes('fallback')).length}</span>
-                          </span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-4 flex-wrap">
-                        <span>Completion rate: <span className="text-foreground">{runObservability.completionRate}%</span></span>
-                        <span>Failure rate: <span className="text-foreground">{runObservability.failureRate}%</span></span>
-                        <span>Timeout-affected runs: <span className="text-foreground">{runObservability.timeoutAffectedRuns}</span></span>
-                        <span>Avg pages/run: <span className="text-foreground">{runObservability.avgPagesVisited}</span></span>
+                        <span>Completion: <span className="text-foreground">{runObservability.completionRate}%</span></span>
                       </div>
                     </div>
                   )}
                 </div>
               )}
-            </div>
           </div>
         </div>
       </div>
