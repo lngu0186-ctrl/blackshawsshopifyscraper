@@ -22,6 +22,31 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 3b manual vendor chunking
+
+### Delivered
+- Added `manualChunks` strategy in `vite.config.ts` to separate major dependency families:
+  - `react-core`
+  - `supabase`
+  - `react-query`
+  - `ui-vendor`
+  - `charts`
+  - `export-vendor`
+  - fallback `vendor`
+- This further reduced the old oversized app shell bundle and made heavy dependencies load in more predictable chunks
+
+### Build impact
+- Remaining largest chunk dropped again to ~565 kB minified instead of the previous ~730 kB main app chunk
+- Export-related dependencies and charting code now sit in isolated bundles rather than inflating the core app path
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- There is still one remaining `vendor` chunk above the warning threshold
+- Further gains will likely come from more targeted dependency isolation or replacing especially heavy libraries on non-critical paths
+- This pass improves chunk topology, but does not remove dependency weight by itself
+
 ## 2026-03-24 — Phase 3a route-level code splitting
 
 ### Delivered
