@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -28,7 +28,6 @@ const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, staleTime: 30_000 } },
 });
 
-// ─── Error Boundary ──────────────────────────────────────────────────────────
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
@@ -37,9 +36,15 @@ class ErrorBoundary extends React.Component<
     super(props);
     this.state = { error: null };
   }
+
   static getDerivedStateFromError(error: Error) {
     return { error };
   }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("[App/ErrorBoundary] render crash", error, errorInfo);
+  }
+
   render() {
     if (this.state.error) {
       return (
@@ -65,8 +70,19 @@ class ErrorBoundary extends React.Component<
         </div>
       );
     }
+
     return this.props.children;
   }
+}
+
+function RouterLogger() {
+  const location = useLocation();
+
+  React.useEffect(() => {
+    console.info("[Router] route changed", location.pathname);
+  }, [location.pathname]);
+
+  return null;
 }
 
 function RouteLoader() {
@@ -79,6 +95,12 @@ function RouteLoader() {
 
 function AppLayout() {
   const { user, loading } = useAuth();
+
+  console.info("[Layout] render", {
+    loading,
+    hasUser: !!user,
+    pathname: typeof window !== "undefined" ? window.location.pathname : "unknown",
+  });
 
   if (loading) {
     return (
@@ -107,7 +129,6 @@ function AppLayout() {
               <Route path="/canonical-review" element={<CanonicalReview />} />
               <Route path="/settings" element={<SettingsPage />} />
               <Route path="/stores/:id" element={<StoreDetail />} />
-              {/* CW Import pipeline */}
               <Route path="/cw-import" element={<CWImportUploadPage />} />
               <Route path="/cw-import/history" element={<CWImportListPage />} />
               <Route path="/cw-import/:jobId" element={<CWImportReviewPage />} />
@@ -120,21 +141,25 @@ function AppLayout() {
   );
 }
 
-const App = () => (
-  <ErrorBoundary>
-    <QueryClientProvider client={queryClient}>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <AuthProvider>
-            <AppLayout />
-          </AuthProvider>
-        </BrowserRouter>
-      </TooltipProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
-);
+const App = () => {
+  console.info("[App] boot");
+
+  return (
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <RouterLogger />
+            <AuthProvider>
+              <AppLayout />
+            </AuthProvider>
+          </BrowserRouter>
+        </TooltipProvider>
+      </QueryClientProvider>
+    </ErrorBoundary>
+  );
+};
 
 export default App;
-
