@@ -22,6 +22,32 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 5a dashboard shell polish
+
+### Delivered
+- Applied a calmer, more premium light dashboard palette across the app shell
+- Updated global design tokens for:
+  - very light grey workspace background
+  - white elevated cards
+  - softer borders
+  - more layered but restrained shadows
+  - larger radii for a higher-end SaaS feel
+- Restyled the sidebar into a lighter, pill-nav control rail with cleaner branding and softer hierarchy
+- Reworked the dashboard top bar into a more polished hero/control shell with:
+  - stronger title hierarchy
+  - pill search/control surfaces
+  - calmer utility cluster
+- Refined dashboard card primitives (KPI cards, pipeline rows, status pills, source cards, activity rows) for more whitespace and a more cohesive premium feel
+- Added breathing room around the full app shell so sidebar and main canvas feel like separate composed surfaces
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- This is the first major visual polish pass, focused on shell + dashboard hierarchy rather than every screen in the app
+- Some secondary pages still inherit older spacing/component density and would benefit from the same premium pass
+- The remaining bundle-size warning is unrelated to the visual redesign work
+
 ## 2026-03-24 — Phase 4l manual preferred retry mode override
 
 ### Delivered

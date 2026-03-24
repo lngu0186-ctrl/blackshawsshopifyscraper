@@ -63,14 +63,14 @@ function NavItem({ to, icon: Icon, label, end }: { to: string; icon: any; label:
   return (
     <RouterNavLink to={to}>
       <div className={cn(
-        'flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-medium transition-all duration-150',
+        'flex items-center gap-3 px-3.5 py-2.5 rounded-full text-[13px] font-medium transition-all duration-150 border',
         active
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-          : 'text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-sidebar-accent-foreground'
+          ? 'bg-sidebar-primary text-sidebar-primary-foreground border-sidebar-primary shadow-card'
+          : 'text-sidebar-foreground border-transparent hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       )}>
-        <Icon className={cn('w-3.5 h-3.5 flex-shrink-0', active ? 'text-sidebar-primary' : 'opacity-70')} />
+        <Icon className={cn('w-4 h-4 flex-shrink-0', active ? 'text-sidebar-primary-foreground' : 'text-sidebar-muted')} />
         <span>{label}</span>
-        {active && <div className="ml-auto w-1 h-1 rounded-full bg-sidebar-primary opacity-80" />}
+        {active && <div className="ml-auto w-1.5 h-1.5 rounded-full bg-white/80" />}
       </div>
     </RouterNavLink>
   );
@@ -137,24 +137,18 @@ export function AppSidebar() {
 
   return (
     <div
-      className="flex flex-col h-full w-[216px] shrink-0"
+      className="flex flex-col h-full w-[248px] shrink-0 rounded-[28px] border border-sidebar-border shadow-card-md overflow-hidden bg-sidebar-background"
       style={{ background: 'hsl(var(--sidebar-background))' }}
     >
-      {/* ── Logo ─────────────────────────────────────────────────── */}
-      <div className="flex items-center gap-2.5 px-4 py-4 border-b" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
-        <div
-          className="w-7 h-7 rounded-lg flex items-center justify-center shrink-0"
-          style={{ background: 'hsl(220 80% 66% / 0.15)' }}
-        >
-          <Pill className="w-3.5 h-3.5" style={{ color: 'hsl(220 80% 70%)' }} />
+      <div className="flex items-center gap-3 px-5 py-5 border-b border-sidebar-border bg-white/70 backdrop-blur">
+        <div className="w-10 h-10 rounded-2xl flex items-center justify-center shrink-0 bg-primary text-primary-foreground shadow-card">
+          <Pill className="w-4 h-4" />
         </div>
         <div className="min-w-0">
-          <p className="text-[13px] font-bold leading-none" style={{ color: 'hsl(var(--sidebar-accent-foreground))' }}>
+          <p className="text-[15px] font-black tracking-tight leading-none text-sidebar-accent-foreground">
             Pharmacy Scout
           </p>
-          <p className="text-[10px] mt-0.5 truncate" style={{ color: 'hsl(var(--sidebar-muted))' }}>
-            AU Data Platform
-          </p>
+          <p className="text-[10px] mt-1 truncate text-sidebar-muted uppercase tracking-[0.18em]">AU Scraper OS</p>
         </div>
       </div>
 
@@ -162,7 +156,7 @@ export function AppSidebar() {
       <nav className="px-2.5 py-3 space-y-4 flex-shrink-0">
         {NAV_SECTIONS.map(section => (
           <div key={section.label}>
-            <p className="text-[9.5px] font-semibold uppercase tracking-widest px-3 mb-1.5" style={{ color: 'hsl(var(--sidebar-muted))' }}>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] px-3.5 mb-2 text-sidebar-muted">
               {section.label}
             </p>
             <div className="space-y-0.5">
@@ -311,8 +305,8 @@ export function AppSidebar() {
         </ScrollArea>
       )}
 
-      {/* ── Footer ───────────────────────────────────────────────── */}
-      <div className="px-2.5 py-3 border-t flex-shrink-0 space-y-1" style={{ borderColor: 'hsl(var(--sidebar-border))' }}>
+      {/* ── Footer actions ────────────────────────────────────────── */}
+      <div className="px-4 py-4 border-t border-sidebar-border space-y-2 flex-shrink-0 bg-muted/30">
         <Button
           variant="ghost"
           size="sm"

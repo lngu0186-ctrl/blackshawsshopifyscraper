@@ -91,12 +91,9 @@ function AppLayout() {
   if (!user) return <Auth />;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background">
-      {/* Dark sidebar */}
+    <div className="flex h-screen overflow-hidden bg-background p-5 gap-5">
       <AppSidebar />
-
-      {/* Light workspace */}
-      <main className="flex-1 overflow-hidden flex flex-col bg-background">
+      <main className="flex-1 overflow-hidden flex flex-col min-w-0 bg-background">
         <ErrorBoundary>
           <Suspense fallback={<RouteLoader />}>
             <Routes>

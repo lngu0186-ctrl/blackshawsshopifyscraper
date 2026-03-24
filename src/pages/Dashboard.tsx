@@ -63,7 +63,8 @@ function KpiCard({ icon: Icon, label, value, sub, trend, color = 'text-primary',
   const animVal = useCountUp(value);
   const iconBg = color === 'text-success' ? 'bg-success/10' : color === 'text-warning' ? 'bg-warning/10' : color === 'text-destructive' ? 'bg-destructive/10' : 'bg-primary/8';
   return (
-    <div className="bg-white rounded-2xl border border-border shadow-card p-4 hover:shadow-card-md transition-all duration-200 hover:-translate-y-0.5">
+    <div className="bg-white rounded-[28px] border border-border shadow-card p-4 hover:shadow-card-md transition-shadow duration-200">
+
       <div className="flex items-start justify-between mb-3">
         <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${iconBg}`}>
           <Icon className={`w-3.5 h-3.5 ${color}`} />
@@ -80,12 +81,13 @@ function KpiCard({ icon: Icon, label, value, sub, trend, color = 'text-primary',
       {loading ? (
         <Skeleton className="h-6 w-16 mb-1" />
       ) : (
-        <p className={`text-[22px] font-bold tabular-nums tracking-tight ${pulse ? 'animate-count-up' : ''}`}>
+        <p className={`text-[30px] leading-none font-black tracking-tight tabular-nums ${pulse ? 'animate-count-up' : ''}`}>
           {animVal.toLocaleString()}
         </p>
       )}
-      <p className="text-[11px] text-muted-foreground mt-0.5 font-medium">{label}</p>
-      {sub && <p className="text-[10px] text-muted-foreground/70 mt-0.5">{sub}</p>}
+      <p className="text-[11px] uppercase tracking-[0.16em] text-muted-foreground mt-1">{label}</p>
+      {sub && <p className="text-[10px] text-muted-foreground mt-0.5">{sub}</p>}
+
     </div>
   );
 }
@@ -104,7 +106,7 @@ function StatusPill({ status }: { status: string }) {
   };
   const s = map[status] ?? { label: status, cls: 'bg-muted text-muted-foreground', dot: 'bg-muted-foreground' };
   return (
-    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-2 py-0.5 rounded-full ${s.cls}`}>
+    <span className={`inline-flex items-center gap-1.5 text-[10px] font-semibold px-3 py-1 rounded-full border border-transparent ${s.cls}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
       {s.label}
     </span>
@@ -119,7 +121,7 @@ function PipelineRow({
 }) {
   const pct = total > 0 ? Math.round((done / total) * 100) : 0;
   return (
-    <div className={`flex items-center gap-3 py-2.5 px-3 rounded-xl transition-colors ${active ? 'bg-primary/5 ring-1 ring-primary/20' : 'hover:bg-muted/50'}`}>
+    <div className={`flex items-center gap-3 py-3 px-3.5 rounded-[22px] transition-colors ${active ? 'bg-primary/5 ring-1 ring-primary/15' : 'hover:bg-muted/50'}`}>
       <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 ${active ? 'bg-primary/15' : 'bg-muted'}`}>
         <Icon className={`w-3.5 h-3.5 ${active ? 'text-primary' : 'text-muted-foreground'}`} />
       </div>
@@ -158,7 +160,7 @@ function SourceCard({ sourceKey, adapter, stats, onScrape, onEnrich, isScraping,
     : 0;
 
   return (
-    <div className="bg-card rounded-2xl border border-border shadow-card p-4 hover:shadow-card-md transition-shadow duration-200 group">
+    <div className="bg-white rounded-[28px] border border-border shadow-card p-5 hover:shadow-card-md transition-all duration-200 group">
       <div className="flex items-start justify-between mb-3">
         <div>
           <p className="text-[13px] font-semibold text-foreground">{adapter.sourceName}</p>
@@ -214,7 +216,7 @@ function ActivityRow({ log }: { log: any }) {
   };
   const cls = levelColor[log.level] ?? levelColor.info;
   return (
-    <div className="flex items-start gap-3 py-2 animate-slide-in-right">
+    <div className="flex items-start gap-3 py-3 animate-slide-in-right">
       <span className={`mt-0.5 text-[9px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide flex-shrink-0 ${cls}`}>
         {log.level}
       </span>
@@ -352,62 +354,61 @@ export default function Dashboard() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden bg-background">
-      {/* ── Top Bar ──────────────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between gap-4 px-6 py-3.5 border-b border-border bg-white flex-shrink-0">
-        <div>
-          <h1 className="text-[17px] font-bold tracking-tight text-foreground leading-none">Dashboard</h1>
-          <p className="text-[11.5px] text-muted-foreground mt-0.5">AU Pharmacy Scout — Operations Centre</p>
-        </div>
+      <div className="px-6 pt-6 pb-3 flex-shrink-0">
+        <div className="rounded-[30px] border border-border bg-white/88 backdrop-blur shadow-card-md px-6 py-5">
+          <div className="flex items-start justify-between gap-6 flex-wrap">
+            <div className="space-y-2">
+              <div className="inline-flex items-center rounded-full border border-border bg-muted/60 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                Operations dashboard
+              </div>
+              <div>
+                <h1 className="text-[34px] leading-none font-black tracking-tight text-foreground">Pharmacy Scout</h1>
+                <p className="text-[13px] text-muted-foreground mt-2 max-w-2xl">A calmer command center for store discovery, scrape execution, extraction quality, and export readiness.</p>
+              </div>
+            </div>
 
-        <div className="flex items-center gap-2 flex-1 max-w-sm">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              value={searchTerm}
-              onChange={e => setSearchTerm(e.target.value)}
-              placeholder="Search products…"
-              className="pl-9 h-9 text-[12.5px] rounded-xl bg-background border-border"
-            />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <StatusPill status={scrapeStatus === 'idle' ? 'idle' : scrapeStatus} />
-
-          {scrapeStatus === 'idle' && (
-            <Button size="sm" className="h-8 gap-1.5 text-[12px] rounded-xl bg-foreground hover:bg-foreground/90 text-background font-semibold" onClick={handleStartScrape}>
-              <Play className="w-3 h-3" /> Run All Stores
-            </Button>
-          )}
-          {isRunning && (
-            <Button size="sm" variant="destructive" className="h-8 gap-1.5 text-[12px] rounded-xl" onClick={cancelRun}>
-              <Square className="w-3 h-3" /> Cancel
-            </Button>
-          )}
-          {['completed', 'cancelled', 'failed'].includes(scrapeStatus) && (
-            <Button size="sm" variant="outline" className="h-8 gap-1.5 text-[12px] rounded-xl" onClick={resetRun}>
-              <RefreshCw className="w-3 h-3" /> Reset
-            </Button>
-          )}
-
-          <Button size="sm" variant="outline" className="h-8 gap-1.5 text-[12px] rounded-xl border-border" asChild>
-            <Link to="/export">
-              <Download className="w-3 h-3" /> Export
-            </Link>
-          </Button>
-
-          <div
-            className="w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold flex-shrink-0 cursor-pointer border border-border"
-            style={{ background: 'hsl(222 47% 22% / 0.08)', color: 'hsl(222 47% 22%)' }}
-          >
-            {user?.email?.slice(0, 2).toUpperCase() ?? 'AU'}
+            <div className="flex items-center gap-2 flex-wrap justify-end">
+              <div className="relative min-w-[220px]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  value={searchTerm}
+                  onChange={e => setSearchTerm(e.target.value)}
+                  placeholder="Search products…"
+                  className="pl-9 h-10 text-xs rounded-full bg-muted/55 border-border"
+                />
+              </div>
+              <StatusPill status={scrapeStatus === 'idle' ? 'idle' : scrapeStatus} />
+              {scrapeStatus === 'idle' && (
+                <Button size="sm" className="h-10 rounded-full gap-1.5 text-xs px-4 bg-primary hover:bg-primary/92 text-primary-foreground shadow-card" onClick={handleStartScrape}>
+                  <Play className="w-3.5 h-3.5" /> Start Scrape
+                </Button>
+              )}
+              {isRunning && (
+                <Button size="sm" variant="destructive" className="h-10 rounded-full gap-1.5 text-xs px-4" onClick={cancelRun}>
+                  <Square className="w-3.5 h-3.5" /> Cancel
+                </Button>
+              )}
+              {['completed', 'cancelled', 'failed'].includes(scrapeStatus) && (
+                <Button size="sm" variant="outline" className="h-10 rounded-full gap-1.5 text-xs px-4" onClick={resetRun}>
+                  <RefreshCw className="w-3.5 h-3.5" /> Reset
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className="h-10 rounded-full gap-1.5 text-xs px-4 bg-white" asChild>
+                <Link to="/export">
+                  <Download className="w-3.5 h-3.5" /> Export
+                </Link>
+              </Button>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 bg-muted text-foreground border border-border">
+                {user?.email?.slice(0, 2).toUpperCase() ?? 'AU'}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
       {/* ── Main scrollable area ─────────────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto">
-        <div className="p-6 space-y-6 max-w-[1440px] mx-auto">
+        <div className="px-6 pb-8 space-y-7 max-w-[1480px] mx-auto">
 
           {/* ── KPI Cards — 7-cell pipeline breakdown ─────────────────────── */}
           <div className="grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3">
@@ -436,11 +437,10 @@ export default function Dashboard() {
 
           {/* ── Running progress banner ──────────────────────────────────────── */}
           {isRunning && (
-            <div className="bg-white border border-warning/25 rounded-2xl px-5 py-4 flex items-center gap-4 animate-fade-in shadow-card">
-              <div className="w-9 h-9 rounded-xl bg-warning/10 flex items-center justify-center shrink-0">
-                <Loader2 className="w-4 h-4 animate-spin text-warning" />
-              </div>
-              <div className="flex-1 min-w-0 space-y-2">
+            <div className="bg-white border border-warning/20 rounded-[28px] px-6 py-4 flex items-center gap-4 animate-fade-in shadow-card-md">
+              <Loader2 className="w-4 h-4 animate-spin text-warning flex-shrink-0" />
+              <div className="flex-1 min-w-0 space-y-1.5">
+
                 <div className="flex items-center justify-between">
                   <span className="text-[13px] font-semibold text-foreground">
                     Scraping {completedStores} / {totalStores} stores
@@ -464,8 +464,9 @@ export default function Dashboard() {
             <div className="xl:col-span-1 space-y-4">
 
               {/* Extraction Pipeline */}
-              <div className="bg-white rounded-2xl border border-border shadow-card">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+              <div className="bg-white rounded-[28px] border border-border shadow-card">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+
                   <div>
                     <h2 className="text-[13.5px] font-bold text-foreground">Extraction Pipeline</h2>
                     <p className="text-[11px] text-muted-foreground mt-0.5">All-time totals</p>
@@ -480,10 +481,11 @@ export default function Dashboard() {
               </div>
 
               {/* Field Coverage */}
-              <div className="bg-white rounded-2xl border border-border shadow-card">
-                <div className="px-5 py-4 border-b border-border">
-                  <h2 className="text-[13.5px] font-bold text-foreground">Extraction Health</h2>
-                  <p className="text-[11px] text-muted-foreground mt-0.5">Field coverage across all products</p>
+              <div className="bg-white rounded-[28px] border border-border shadow-card">
+                <div className="px-4 py-3 border-b border-border">
+                  <h2 className="text-[13px] font-bold text-foreground">Extraction Health</h2>
+                  <p className="text-[10px] text-muted-foreground mt-0.5">Field coverage across all products</p>
+
                 </div>
                 <div className="p-5 space-y-3.5">
                   {coverageFields.map(f => (
@@ -496,9 +498,10 @@ export default function Dashboard() {
               </div>
 
               {/* Export Readiness */}
-              <div className="bg-white rounded-2xl border border-border shadow-card">
-                <div className="px-5 py-4 border-b border-border">
-                  <h2 className="text-[13.5px] font-bold text-foreground">Export Readiness</h2>
+              <div className="bg-white rounded-[28px] border border-border shadow-card">
+                <div className="px-4 py-3 border-b border-border">
+                  <h2 className="text-[13px] font-bold text-foreground">Export Readiness</h2>
+
                 </div>
                 <div className="p-5 space-y-3">
                   {[
@@ -566,8 +569,9 @@ export default function Dashboard() {
             <div className="xl:col-span-1 space-y-4">
 
               {/* Live Activity Feed */}
-              <div className="bg-white rounded-2xl border border-border shadow-card flex flex-col" style={{ maxHeight: '420px' }}>
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border flex-shrink-0">
+              <div className="bg-white rounded-[28px] border border-border shadow-card flex flex-col" style={{ maxHeight: '420px' }}>
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border flex-shrink-0">
+
                   <div>
                     <h2 className="text-[13.5px] font-bold text-foreground">Live Activity</h2>
                     <p className="text-[11px] text-muted-foreground mt-0.5">Real-time scraper events</p>
@@ -592,9 +596,10 @@ export default function Dashboard() {
 
               {/* Scrape Run: Per-Store Status */}
               {Object.keys(storeStatuses).length > 0 && (
-                <div className="bg-white rounded-2xl border border-border shadow-card">
-                  <div className="px-5 py-4 border-b border-border">
-                    <h2 className="text-[13.5px] font-bold text-foreground">Store Progress</h2>
+                <div className="bg-white rounded-[28px] border border-border shadow-card">
+                  <div className="px-4 py-3 border-b border-border">
+                    <h2 className="text-[13px] font-bold text-foreground">Store Progress</h2>
+
                   </div>
                   <div className="p-3 space-y-2">
                     {Object.values(storeStatuses).map((s: any) => {
@@ -618,10 +623,11 @@ export default function Dashboard() {
               )}
 
               {/* Store Library quick view */}
-              <div className="bg-white rounded-2xl border border-border shadow-card">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-border">
-                  <h2 className="text-[13.5px] font-bold text-foreground">Store Library</h2>
-                  <span className="text-[11px] text-muted-foreground">{stores?.length ?? 0} total</span>
+              <div className="bg-white rounded-[28px] border border-border shadow-card">
+                <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                  <h2 className="text-[13px] font-bold text-foreground">Store Library</h2>
+                  <span className="text-[10px] text-muted-foreground">{stores?.length ?? 0} total</span>
+
                 </div>
                 <div className="divide-y divide-border/40">
                   {storesLoading && [1,2,3].map(i => (
@@ -663,7 +669,8 @@ export default function Dashboard() {
 
               {/* Last run summary */}
               {(lastScraped || recentRuns.length > 0) && (
-                <div className="bg-white rounded-2xl border border-border shadow-card px-5 py-4 space-y-2">
+                <div className="bg-white rounded-[28px] border border-border shadow-card px-4 py-3 space-y-2">
+
                   {lastScraped && (
                     <div className="flex items-center gap-2 text-[12px] text-muted-foreground">
                       <Clock className="w-3.5 h-3.5 flex-shrink-0" />
