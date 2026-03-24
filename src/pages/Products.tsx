@@ -217,6 +217,16 @@ export default function Products() {
 
       {/* ── Toolbar ─────────────────────────────────────────────── */}
       <div className="flex-shrink-0 px-6 py-3 border-b border-border bg-white flex flex-wrap gap-2 items-center">
+        {/* Search */}
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+          <Input
+            placeholder="Search title, vendor, tags…"
+            className="pl-8 h-8 text-[12px] w-56 rounded-xl bg-background border-border"
+            value={filter.search || ''}
+            onChange={e => update({ search: e.target.value || undefined })}
+          />
+        </div>
         {/* Filters */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
