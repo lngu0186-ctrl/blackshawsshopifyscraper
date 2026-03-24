@@ -45,7 +45,10 @@ function riskTone(status?: string) {
     case 'auth_required':
     case 'zero_products':
     case 'stale':
+    case 'retryable_http_error':
       return 'bg-warning/10 text-warning border-warning/30';
+    case 'timeout_fallout':
+      return 'bg-primary/10 text-primary border-primary/30';
     case 'productive':
       return 'bg-success/10 text-success border-success/30';
     default:
@@ -62,6 +65,8 @@ function RiskIcon({ status }: { status?: string }) {
     case 'failing':
     case 'invalid':
       return <XCircle className="w-3.5 h-3.5" />;
+    case 'timeout_fallout':
+      return <Clock className="w-3.5 h-3.5" />;
     default:
       return <AlertTriangle className="w-3.5 h-3.5" />;
   }
@@ -76,6 +81,8 @@ function riskScore(row: any) {
     case 'zero_products': score += 70; break;
     case 'stale': score += 60; break;
     case 'invalid': score += 50; break;
+    case 'timeout_fallout': score += 46; break;
+    case 'retryable_http_error': score += 44; break;
     case 'never_scraped': score += 40; break;
     case 'unknown': score += 30; break;
     case 'productive': score += 5; break;
@@ -144,6 +151,8 @@ export default function Diagnostics() {
         reason: d?.reason ?? 'No diagnostic summary yet',
         failuresLast7Days: d?.failuresLast7Days ?? 0,
         warningsLast7Days: d?.warningsLast7Days ?? 0,
+        parentTimeoutsLast7Days: d?.parentTimeoutsLast7Days ?? 0,
+        retryableHttpErrorsLast7Days: d?.retryableHttpErrorsLast7Days ?? 0,
         latestRunStatus: d?.latestRunStatus ?? null,
         latestRunAt: d?.latestRunAt ?? null,
         latestErrorMessage: d?.latestErrorMessage ?? null,
@@ -287,6 +296,8 @@ export default function Diagnostics() {
                     <SelectItem value="blocked">Blocked</SelectItem>
                     <SelectItem value="failing">Failing</SelectItem>
                     <SelectItem value="auth_required">Auth required</SelectItem>
+                    <SelectItem value="timeout_fallout">Run timeout</SelectItem>
+                    <SelectItem value="retryable_http_error">Retryable HTTP</SelectItem>
                     <SelectItem value="zero_products">Zero products</SelectItem>
                     <SelectItem value="stale">Stale</SelectItem>
                     <SelectItem value="never_scraped">Never scraped</SelectItem>
@@ -359,6 +370,20 @@ export default function Diagnostics() {
                         </td>
                         <td className="px-4 py-3 min-w-[280px]">
                           <p className="text-[11px] text-foreground">{row.reason}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap mt-1">
+                            {(row.parentTimeoutsLast7Days ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-[10px] text-primary">
+                                <Clock className="w-3 h-3" />
+                                {row.parentTimeoutsLast7Days} timeout{row.parentTimeoutsLast7Days === 1 ? '' : 's'}
+                              </span>
+                            )}
+                            {(row.retryableHttpErrorsLast7Days ?? 0) > 0 && (
+                              <span className="inline-flex items-center gap-1 rounded-full border border-warning/30 bg-warning/10 px-2 py-0.5 text-[10px] text-warning">
+                                <AlertTriangle className="w-3 h-3" />
+                                {row.retryableHttpErrorsLast7Days} retryable HTTP
+                              </span>
+                            )}
+                          </div>
                           {row.latestErrorMessage && (
                             <p className="text-[10px] text-destructive mt-1 line-clamp-2">{row.latestErrorMessage}</p>
                           )}

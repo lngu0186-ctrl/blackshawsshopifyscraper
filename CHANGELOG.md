@@ -22,6 +22,26 @@
 - Current schema remains scrape-row centric rather than canonical-product centric
 - Store diagnostics are still not decision-grade
 
+## 2026-03-24 — Phase 4c diagnostics reason badges + retry counters
+
+### Delivered
+- Surfaced retry/timeout diagnostics directly into the Diagnostics store risk table
+- Added visible reason badges for:
+  - parent/run timeout fallout counts
+  - retryable HTTP issue counts
+- Added Diagnostics risk filters for the newer statuses:
+  - `timeout_fallout`
+  - `retryable_http_error`
+- Updated Diagnostics risk styling/scoring so these newer operational states are visible and distinct from hard blocked/failing states
+
+### Test results
+- `npm run build` completed successfully
+
+### Known limitations
+- Badge counts still depend on currently available `scraper_events` and recent event history
+- Reason badges improve visibility, but recommended-action text is still implicit rather than explicit in the UI
+- Until hosted edge functions are redeployed, live event streams may still contain a mix of structured and legacy text patterns
+
 ## 2026-03-24 — Phase 4b structured failure reason codes + retryable HTTP handling
 
 ### Delivered
