@@ -686,9 +686,11 @@ export default function Dashboard() {
                   )}
                 </div>
               )}
-          </div>
-        </div>
-      </div>
-    </div>
+            </div>{/* ── end right col ── */}
+
+          </div>{/* ── end 3-col grid ── */}
+        </div>{/* ── end inner padding ── */}
+      </div>{/* ── end scrollable area ── */}
+    </div>{/* ── end outer shell ── */}
   );
 }
