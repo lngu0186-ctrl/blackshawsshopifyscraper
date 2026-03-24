@@ -230,10 +230,7 @@ export function AppSidebar() {
           )}
           <div className="space-y-0.5 py-1">
             {filteredStores.map(store => (
-              <div key={store.id} className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors" style={{ ':hover': { background: 'hsl(var(--sidebar-accent))' } }}
-                onMouseEnter={e => (e.currentTarget.style.background = 'hsl(var(--sidebar-accent)/50%)')}
-                onMouseLeave={e => (e.currentTarget.style.background = '')}
-              >
+              <div key={store.id} className="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl transition-colors hover:bg-sidebar-accent/50">
                 <div className={cn('w-1.5 h-1.5 rounded-full shrink-0 mt-0.5', storeHealthDot(store))} />
                 <RouterNavLink to={`/stores/${store.id}`} className="flex-1 min-w-0">
                   <div className="flex items-center gap-1 min-w-0">
