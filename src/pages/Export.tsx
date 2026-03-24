@@ -361,39 +361,39 @@ export default function Export() {
             <DataQualityPanel onEnrich={() => enrichMutation.mutate({ limit: 50 })} />
 
             <div className="space-y-3">
-              <div className="rounded-lg border border-border bg-card p-5 space-y-3 shadow-card">
-                <h2 className="text-sm font-semibold">Export Modes</h2>
+              <div className="bg-white rounded-2xl border border-border shadow-card p-5 space-y-3">
+                <h2 className="text-[13.5px] font-bold text-foreground">Export Modes</h2>
 
-                <Button className="w-full h-12 justify-start gap-3 bg-primary hover:bg-primary/90 text-primary-foreground"
+                <Button className="w-full h-12 justify-start gap-3 rounded-xl bg-foreground hover:bg-foreground/90 text-background"
                   onClick={handleExportReady}>
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Export Shopify Ready CSV</p>
-                    <p className="text-xs opacity-80">{readyCount.toLocaleString()} rows — price guaranteed</p>
+                    <p className="text-[13px] font-semibold">Export Shopify Ready CSV</p>
+                    <p className="text-[11px] opacity-70">{readyCount.toLocaleString()} rows — price guaranteed</p>
                   </div>
                 </Button>
 
-                <Button variant="outline" className="w-full h-12 justify-start gap-3"
+                <Button variant="outline" className="w-full h-12 justify-start gap-3 rounded-xl"
                   onClick={handleExportReview}>
-                  <AlertTriangle className="w-4 h-4 text-muted-foreground" />
+                  <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Export Review Required CSV</p>
-                    <p className="text-xs text-muted-foreground">{reviewCount.toLocaleString()} rows — missing fields column included</p>
+                    <p className="text-[13px] font-semibold">Export Review Required CSV</p>
+                    <p className="text-[11px] text-muted-foreground">{reviewCount.toLocaleString()} rows — missing fields column</p>
                   </div>
                 </Button>
 
-                <Button variant="outline" className="w-full h-12 justify-start gap-3"
+                <Button variant="outline" className="w-full h-12 justify-start gap-3 rounded-xl"
                   onClick={handleExportRaw}>
-                  <FileSpreadsheet className="w-4 h-4 text-primary" />
+                  <FileSpreadsheet className="w-4 h-4 text-primary flex-shrink-0" />
                   <div className="text-left">
-                    <p className="text-sm font-medium">Export Full Raw Excel</p>
-                    <p className="text-xs text-muted-foreground">{totalProducts.toLocaleString()} rows — all data + debug columns</p>
+                    <p className="text-[13px] font-semibold">Export Full Raw Excel</p>
+                    <p className="text-[11px] text-muted-foreground">{totalProducts.toLocaleString()} rows — all data + debug columns</p>
                   </div>
                 </Button>
 
-                <div className="flex items-center gap-3 pt-1 border-t border-border">
+                <div className="flex items-center gap-3 pt-2 border-t border-border">
                   <Switch id="includeIncomplete" checked={includeIncomplete} onCheckedChange={setIncludeIncomplete} />
-                  <Label htmlFor="includeIncomplete" className="text-xs cursor-pointer text-muted-foreground">Include incomplete rows in Shopify CSV</Label>
+                  <Label htmlFor="includeIncomplete" className="text-[11.5px] cursor-pointer text-muted-foreground">Include incomplete rows in Shopify CSV</Label>
                 </div>
               </div>
             </div>
